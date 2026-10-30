@@ -32,6 +32,17 @@
           <option value="off" data-i18n="modeOff"></option>
         </select>
       </label>
+      <label><span data-i18n="settingsWidth"></span>
+        <select id="setting-width">
+          <option value="280" data-i18n="widthNarrow"></option>
+          <option value="340" data-i18n="widthNormal"></option>
+          <option value="440" data-i18n="widthWide"></option>
+          <option value="560" data-i18n="widthXWide"></option>
+        </select>
+      </label>
+      <label><span data-i18n="settingsAccent"></span>
+        <span class="accent-pick"><input type="color" id="setting-accent"><button type="button" id="accent-reset" data-i18n="accentReset"></button></span>
+      </label>
     </details>
     <script type="module" src="panel.js"></script>
   </body>

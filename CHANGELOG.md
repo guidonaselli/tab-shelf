@@ -1,5 +1,9 @@
 # Changelog
 
+## Unreleased
+
+- Settings: panel width (narrow to extra wide) and accent color for the edge panel.
+
 ## 0.2.0
 
 - Edge panel on the left or right of any page, opened by hovering the edge.

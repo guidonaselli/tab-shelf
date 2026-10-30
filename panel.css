@@ -6,7 +6,8 @@
   --hairline: color-mix(in srgb, CanvasText 14%, var(--surface));
   --hover: color-mix(in srgb, CanvasText 8%, var(--surface));
   --pressed: color-mix(in srgb, CanvasText 14%, var(--surface));
-  --accent: light-dark(#0b57d0, #8ab4f8);
+  --accent-default: light-dark(#0b57d0, #8ab4f8);
+  --accent: var(--accent-default);
   --selected: color-mix(in srgb, var(--accent) 16%, var(--surface));
   --danger: light-dark(#b3261e, #f2b8b5);
   --radius: 8px;
@@ -66,3 +67,7 @@ button:focus-visible, select:focus-visible, .move-select:focus-within, summary:f
 #settings select { max-width: 70%; height: 28px; padding: 0 8px; font: inherit; color: inherit; background: var(--hover); border: 0; border-radius: 6px; cursor: pointer; }
 
 @media (prefers-reduced-motion: reduce) { * { transition: none !important; } }
+.accent-pick { display: flex; align-items: center; gap: 8px; }
+.accent-pick input { width: 28px; height: 28px; padding: 0; border: 0; border-radius: 6px; background: none; cursor: pointer; }
+.accent-pick button { height: 28px; padding: 0 8px; font-size: 12px; color: var(--muted); border-radius: 6px; }
+.accent-pick button:hover { color: var(--fg); background: var(--hover); }

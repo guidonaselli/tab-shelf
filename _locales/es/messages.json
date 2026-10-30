@@ -25,5 +25,12 @@
   "sideRight": { "message": "Derecha" },
   "settingsMode": { "message": "Panel de borde" },
   "modeHover": { "message": "Mostrar al pasar el mouse por el borde" },
-  "modeOff": { "message": "Desactivado (solo side panel)" }
+  "modeOff": { "message": "Desactivado (solo side panel)" },
+  "settingsWidth": { "message": "Ancho del panel" },
+  "widthNarrow": { "message": "Angosto" },
+  "widthNormal": { "message": "Normal" },
+  "widthWide": { "message": "Ancho" },
+  "widthXWide": { "message": "Muy ancho" },
+  "settingsAccent": { "message": "Color de acento" },
+  "accentReset": { "message": "Restablecer" }
 }

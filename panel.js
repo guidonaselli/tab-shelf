@@ -323,18 +323,35 @@ function subscribe() {
 }
 
 function showSettings(raw) {
-  const { side, mode } = normalizeSettings(raw);
+  const { side, mode, width, accent } = normalizeSettings(raw);
   $('setting-side').value = side;
   $('setting-mode').value = mode;
+  $('setting-width').value = String(width);
+  $('setting-accent').value = accent || '#0b57d0';
+  applyAccent(accent);
+}
+
+function applyAccent(accent) {
+  if (accent) document.documentElement.style.setProperty('--accent', accent);
+  else document.documentElement.style.removeProperty('--accent');
 }
 
 async function initSettings() {
-  showSettings((await chrome.storage.local.get('settings')).settings);
+  const stored = (await chrome.storage.local.get('settings')).settings;
+  showSettings(stored);
+  let accentChosen = Boolean(normalizeSettings(stored).accent);
   const save = run(() => chrome.storage.local.set({
-    settings: normalizeSettings({ side: $('setting-side').value, mode: $('setting-mode').value }),
+    settings: normalizeSettings({
+      side: $('setting-side').value, mode: $('setting-mode').value,
+      width: Number($('setting-width').value), accent: accentChosen ? $('setting-accent').value : '',
+    }),
   }));
   $('setting-side').addEventListener('change', save);
   $('setting-mode').addEventListener('change', save);
+  $('setting-width').addEventListener('change', save);
+  $('setting-accent').addEventListener('input', () => { accentChosen = true; applyAccent($('setting-accent').value); });
+  $('setting-accent').addEventListener('change', save);
+  $('accent-reset').addEventListener('click', () => { accentChosen = false; applyAccent(''); save(); });
 }
 
 applyStaticText();

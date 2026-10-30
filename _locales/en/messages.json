@@ -25,5 +25,12 @@
   "sideRight": { "message": "Right" },
   "settingsMode": { "message": "Edge panel" },
   "modeHover": { "message": "Show when hovering the edge" },
-  "modeOff": { "message": "Off (side panel only)" }
+  "modeOff": { "message": "Off (side panel only)" },
+  "settingsWidth": { "message": "Panel width" },
+  "widthNarrow": { "message": "Narrow" },
+  "widthNormal": { "message": "Normal" },
+  "widthWide": { "message": "Wide" },
+  "widthXWide": { "message": "Extra wide" },
+  "settingsAccent": { "message": "Accent color" },
+  "accentReset": { "message": "Reset" }
 }

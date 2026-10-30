@@ -1,14 +1,13 @@
 // Content script: panel pegado al borde de la página que aparece al pasar el mouse por el costado.
 (async () => {
   const ZONE_PX = 32;
-  const WIDTH_PX = 340;
   const REVEAL_DELAY_MS = 200;
   const HIDE_DELAY_MS = 350;
   const EXTENSION_ORIGIN = new URL(chrome.runtime.getURL('')).origin;
 
   const STYLE = `
     :host { all: initial; }
-    .panel { position: fixed; top: 8px; z-index: 2147483647; width: ${WIDTH_PX}px; max-width: calc(90vw - 16px); height: calc(100vh - 16px);
+    .panel { position: fixed; top: 8px; z-index: 2147483647; width: var(--w); max-width: calc(90vw - 16px); height: calc(100vh - 16px);
       overflow: hidden; border-radius: 12px; visibility: hidden; transform: translateX(var(--off)); background: Canvas;
       box-shadow: 0 0 0 1px rgb(128 128 128 / 30%), 0 8px 24px rgb(0 0 0 / 30%); transition: transform 140ms cubic-bezier(.2, 0, 0, 1), visibility 140ms; }
     .panel.open { visibility: visible; transform: none; }
@@ -21,7 +20,11 @@
   `;
 
   // Un content script no puede importar módulos (YouTube bloquea el import por origen): misma regla que src/settings.js
-  const normalizeSettings = (raw) => ({ side: raw?.side === 'right' ? 'right' : 'left', mode: raw?.mode === 'off' ? 'off' : 'hover' });
+  const normalizeSettings = (raw) => ({
+    side: raw?.side === 'right' ? 'right' : 'left',
+    mode: raw?.mode === 'off' ? 'off' : 'hover',
+    width: [280, 340, 440, 560].includes(raw?.width) ? raw.width : 340,
+  });
 
   let settings = normalizeSettings((await chrome.storage.local.get('settings')).settings);
   let ui = null;
@@ -85,6 +88,7 @@
     if (settings.mode === 'off') return unmount();
     if (!ui) mount();
     ui.host.dataset.side = settings.side;
+    ui.host.style.setProperty('--w', `${settings.width}px`);
   }
 
   // La zona se detecta por posición en el documento, no con un elemento: ningún elemento de la página puede taparla.
