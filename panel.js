@@ -1,12 +1,14 @@
-import { buildView, filterView, addPin, removePin, dropIndex } from './src/model.js';
+import { buildView, filterView, addPin, removePin, dropIndex, nextWindowId } from './src/model.js';
 
 const RENDER_DELAY_MS = 100;
 const DRAG_TYPE = 'application/x-zts-tab';
+// cambios de pestaña que alteran lo que se dibuja; el resto (audible, groupId…) no justifica un render
+const VISIBLE_TAB_CHANGES = ['title', 'url', 'favIconUrl', 'status', 'discarded'];
 
 const t = (key, ...substitutions) => chrome.i18n.getMessage(key, substitutions);
 const $ = (id) => document.getElementById(id);
 
-const state = { view: null, query: '', dragging: null, renderPending: false, timer: 0 };
+const state = { view: null, query: '', dragging: null, renderPending: false, renderSeq: 0, timer: 0 };
 
 function applyStaticText() {
   document.documentElement.lang = chrome.i18n.getUILanguage();
@@ -56,6 +58,15 @@ async function readPins() {
   return (await chrome.storage.local.get('pins')).pins ?? [];
 }
 
+// El lock es del origen de la extensión: serializa las escrituras de todos los paneles abiertos.
+function mutatePins(update) {
+  return navigator.locks.request('zts-pins', async () => {
+    const pins = await readPins();
+    const next = update(pins);
+    if (next !== pins) await chrome.storage.local.set({ pins: next });
+  });
+}
+
 async function loadView() {
   const [windows, pins, current] = await Promise.all([
     chrome.windows.getAll({ populate: true, windowTypes: ['normal'] }),
@@ -66,8 +77,15 @@ async function loadView() {
 }
 
 async function render() {
+  const seq = ++state.renderSeq;
   try {
-    state.view = await loadView();
+    const view = await loadView();
+    if (seq !== state.renderSeq) return;
+    if (state.dragging) {
+      state.renderPending = true;
+      return;
+    }
+    state.view = view;
     draw();
   } catch (error) {
     showError(error);
@@ -85,7 +103,7 @@ function scheduleRender() {
 }
 
 function icon(favIconUrl, title) {
-  const letter = () => el('span', { className: 'icon letter', textContent: (title.trim()[0] ?? '?').toUpperCase() });
+  const letter = () => el('span', { className: 'icon letter', textContent: (Array.from(title.trim())[0] ?? '?').toUpperCase() });
   if (!favIconUrl) return letter();
   const img = el('img', { className: 'icon', alt: '', src: favIconUrl, referrerPolicy: 'no-referrer' });
   img.addEventListener('error', () => img.replaceWith(letter()), { once: true });
@@ -106,28 +124,23 @@ const focusTab = run(activate);
 
 const openOrFocus = run(async (pin) => {
   const open = pin.openTabId === null ? null : findTab(pin.openTabId);
-  if (open) return activate(open);
+  if (open) {
+    // la pestaña pudo cerrarse dentro del lote de render: se abre una nueva en vez de fallar
+    try {
+      return await activate(open);
+    } catch {}
+  }
   await chrome.tabs.create({ url: pin.url, windowId: await currentWindowId() });
 });
 
-const togglePin = run(async (tab) => {
-  const pins = await readPins();
-  const next = tab.pinId ? removePin(pins, tab.pinId) : addPin(pins, tab, crypto.randomUUID());
-  if (next !== pins) await chrome.storage.local.set({ pins: next });
-});
+const togglePin = run((tab) =>
+  mutatePins((pins) => (tab.pinId ? removePin(pins, tab.pinId) : addPin(pins, tab, crypto.randomUUID()))));
 
-const unpin = run(async (pinId) => {
-  await chrome.storage.local.set({ pins: removePin(await readPins(), pinId) });
-});
+const unpin = run((pinId) => mutatePins((pins) => removePin(pins, pinId)));
 
 const moveTab = run(async (tabId, windowId, index) => {
   await chrome.tabs.move(tabId, { windowId, index });
 });
-
-function otherWindowId(win) {
-  const all = state.view.windows;
-  return all[(all.indexOf(win) + 1) % all.length].id;
-}
 
 function clearDropMarks() {
   for (const row of document.querySelectorAll('.drop-before, .drop-after')) {
@@ -145,16 +158,18 @@ function endDrag() {
   }
 }
 
-function tabRow(tab, win) {
+function tabRow(tab) {
+  const key = `tab:${tab.id}`;
   const main = el('button', { type: 'button', className: 'main', title: tab.url },
     icon(tab.favIconUrl, tab.title), el('span', { className: 'title', textContent: tab.title }));
+  main.dataset.focus = `${key}:main`;
+  if (tab.active) main.setAttribute('aria-current', 'true');
   main.addEventListener('click', () => focusTab(tab));
 
-  const pin = el('button', {
-    type: 'button',
-    className: tab.pinId ? 'action on' : 'action',
-    textContent: tab.pinId ? t('unpinTab') : t('pinTab'),
-  });
+  const pinLabel = tab.pinId ? t('unpinTab') : t('pinTab');
+  const pin = el('button', { type: 'button', className: tab.pinId ? 'action on' : 'action', textContent: pinLabel });
+  pin.dataset.focus = `${key}:pin`;
+  pin.setAttribute('aria-label', `${pinLabel}: ${tab.title}`);
   pin.addEventListener('click', () => togglePin(tab));
 
   const row = el('li', { className: 'row', draggable: true }, main, pin);
@@ -162,12 +177,15 @@ function tabRow(tab, win) {
   row.classList.toggle('discarded', tab.discarded);
 
   if (state.view.windows.length > 1) {
+    const label = `${t('moveToOtherWindow')}: ${tab.title}`;
     const move = el('button', { type: 'button', className: 'action', textContent: '↗', title: t('moveToOtherWindow') });
-    move.setAttribute('aria-label', t('moveToOtherWindow'));
-    move.addEventListener('click', () => moveTab(tab.id, otherWindowId(win), -1));
+    move.dataset.focus = `${key}:move`;
+    move.setAttribute('aria-label', label);
+    move.addEventListener('click', () => moveTab(tab.id, nextWindowId(state.view.windows, tab.windowId), -1));
     row.append(move);
   }
 
+  let after = false;
   row.addEventListener('dragstart', (event) => {
     state.dragging = { tabId: tab.id, windowId: tab.windowId, index: tab.index };
     event.dataTransfer.setData(DRAG_TYPE, String(tab.id));
@@ -180,17 +198,16 @@ function tabRow(tab, win) {
     event.preventDefault();
     event.stopPropagation();
     const rect = row.getBoundingClientRect();
-    const after = event.clientY > rect.top + rect.height / 2;
+    after = event.clientY > rect.top + rect.height / 2;
     clearDropMarks();
     row.classList.add(after ? 'drop-after' : 'drop-before');
-    row.dataset.after = String(after);
   });
   row.addEventListener('drop', (event) => {
     if (!state.dragging) return;
     event.preventDefault();
     event.stopPropagation();
     const { tabId, windowId, index } = state.dragging;
-    const insertBefore = tab.index + (row.dataset.after === 'true' ? 1 : 0);
+    const insertBefore = tab.index + (after ? 1 : 0);
     endDrag();
     moveTab(tabId, tab.windowId, dropIndex({ fromWindowId: windowId, fromIndex: index, toWindowId: tab.windowId, insertBefore }));
   });
@@ -202,7 +219,7 @@ function windowSection(win, position) {
   if (win.isCurrent) heading.append(el('span', { className: 'tag', textContent: ` ${t('currentWindow')}` }));
   if (win.minimized) heading.append(el('span', { className: 'tag', textContent: ` ${t('minimizedWindow')}` }));
 
-  const list = el('ul', { className: 'list' }, ...win.tabs.map((tab) => tabRow(tab, win)));
+  const list = el('ul', { className: 'list' }, ...win.tabs.map(tabRow));
   const section = el('section', {}, heading, list);
   section.addEventListener('dragover', (event) => {
     if (!state.dragging) return;
@@ -222,44 +239,37 @@ function windowSection(win, position) {
 function pinRow(pin) {
   const main = el('button', { type: 'button', className: 'main', title: pin.url },
     icon(pin.favIconUrl, pin.title), el('span', { className: 'title', textContent: pin.title }));
+  main.dataset.focus = `pin:${pin.id}:main`;
   main.addEventListener('click', () => openOrFocus(pin));
   const remove = el('button', { type: 'button', className: 'action', textContent: '×', title: t('unpinTab') });
-  remove.setAttribute('aria-label', t('unpinTab'));
+  remove.dataset.focus = `pin:${pin.id}:remove`;
+  remove.setAttribute('aria-label', `${t('unpinTab')}: ${pin.title}`);
   remove.addEventListener('click', () => unpin(pin.id));
   return el('li', { className: pin.openTabId === null ? 'row' : 'row active' }, main, remove);
 }
 
 function draw() {
+  // un render no debe sacarle el foco a quien navega con teclado
+  const focused = document.activeElement?.dataset?.focus;
   const filtered = filterView(state.view, state.query);
   $('pins').replaceChildren(...filtered.pins.map(pinRow));
   $('pins-empty').hidden = state.view.pins.length > 0;
   $('windows').replaceChildren(...filtered.windows.map((win) => windowSection(win, state.view.windows.findIndex((w) => w.id === win.id) + 1)));
   $('no-results').hidden = state.query === '' || filtered.windows.length > 0 || filtered.pins.length > 0;
-}
-
-async function fillDiagnostics() {
-  const [current, lastFocused, all] = await Promise.all([
-    chrome.windows.getCurrent(),
-    chrome.windows.getLastFocused({ windowTypes: ['normal'] }),
-    chrome.windows.getAll({ windowTypes: ['normal'] }),
-  ]);
-  $('diagnostics').textContent = [
-    navigator.userAgent,
-    `sidePanel: ${Boolean(chrome.sidePanel)}`,
-    `getCurrent: ${current.id} (${current.type})`,
-    `getLastFocused: ${lastFocused.id}`,
-    `windows: ${all.map((w) => w.id).join(', ')}`,
-  ].join('\n');
+  if (focused) document.querySelector(`[data-focus="${CSS.escape(focused)}"]`)?.focus();
 }
 
 function subscribe() {
   for (const event of [
-    chrome.tabs.onCreated, chrome.tabs.onRemoved, chrome.tabs.onUpdated, chrome.tabs.onMoved,
-    chrome.tabs.onAttached, chrome.tabs.onDetached, chrome.tabs.onActivated, chrome.tabs.onReplaced,
+    chrome.tabs.onCreated, chrome.tabs.onRemoved, chrome.tabs.onMoved, chrome.tabs.onAttached,
+    chrome.tabs.onDetached, chrome.tabs.onActivated, chrome.tabs.onReplaced,
     chrome.windows.onCreated, chrome.windows.onRemoved, chrome.windows.onFocusChanged, chrome.windows.onBoundsChanged,
   ]) {
     event.addListener(scheduleRender);
   }
+  chrome.tabs.onUpdated.addListener((_tabId, change) => {
+    if (VISIBLE_TAB_CHANGES.some((key) => key in change)) scheduleRender();
+  });
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area === 'local' && changes.pins) scheduleRender();
   });
@@ -272,5 +282,4 @@ $('search').addEventListener('input', (event) => {
 });
 subscribe();
 render();
-fillDiagnostics().catch(showError);
 $('search').focus();

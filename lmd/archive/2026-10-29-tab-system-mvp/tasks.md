@@ -6,7 +6,7 @@
 
 ## 2. Modelo
 - [x] 2.1 `src/model.js`: `normalizeUrl`, `matchPin`, `buildView`, `filterView`, `addPin`, `removePin`, `dropIndex`
-- [x] 2.2 `test/model.test.js` con valores literales; `node --test` da 12 de 12
+- [x] 2.2 `test/model.test.js` con valores literales; `node --test` da 22 de 22
 
 ## 3. Lista y salto entre ventanas
 - [x] 3.1 Panel con `render()` por lotes (~100 ms) y listeners de `tabs`, `windows` y `storage.onChanged`

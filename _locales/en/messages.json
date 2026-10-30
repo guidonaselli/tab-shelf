@@ -15,7 +15,6 @@
   "pinTab": { "message": "Pin" },
   "unpinTab": { "message": "Unpin" },
   "moveToOtherWindow": { "message": "Move to the other window" },
-  "diagnosticsHeading": { "message": "Diagnostics" },
   "errorGeneric": {
     "message": "Something went wrong: $DETAIL$",
     "placeholders": { "detail": { "content": "$1", "example": "Tabs cannot be edited right now." } }

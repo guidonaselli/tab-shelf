@@ -30,9 +30,13 @@ Etiquetas: **K** conocido, **I** inferido, **U** sin confirmar (se resuelve a ma
 - Solo ventanas `normal`; incognito fuera (mover entre incognito y normal probablemente falla, **I**).
 - `tabs.move` a la última posición de una ventana; mover la última pestaña de una ventana cierra
   esa ventana y su panel (**K**).
-- Pin: coincide por mismo sitio + prefijo de ruta, ignorando hash y query (default; ver decisiones).
-  Si hay varias pestañas que coinciden, gana la de la ventana actual.
-- Pin desde cualquier fila de pestaña, no desde "la activa"; no se agregan duplicados.
+- Pin: cubre su sitio (host:puerto, http y https cuentan como uno) y todo lo que cuelga de su ruta,
+  ignorando hash y query. Si hay varias pestañas que coinciden, gana la de la ventana actual.
+- Una pestaña "es" un pin solo con la misma dirección exacta (sitio, ruta y query): así un pin
+  ancestro no hace que el botón de una pestaña hija borre el pin de la raíz, y dos videos con
+  distinta query son pins distintos.
+- Pin desde cualquier fila de pestaña, no desde "la activa"; no se agregan duplicados. Las
+  escrituras de pins se serializan con `navigator.locks` (compartido entre paneles).
 - Favicon con `<img>` y letra inicial si falla. Filas como `<button>`, búsqueda enfocada al abrir,
   Enter salta, botón "mover a otra ventana" como alternativa a arrastrar.
 - Estados vacíos: sin pins, sin resultados, una sola ventana.
@@ -101,3 +105,17 @@ Verificado automáticamente por CDP contra el `chrome.exe` de Helium:
 
 Límite de lo verificado: los dos monitores se simularon con ventanas en `left` 0 y 2000 y el caso
 Gmail con un redirect local; el comportamiento con tus monitores y con Gmail real no se probó.
+
+## Revisión (diff-review)
+
+Corregido: botón "mover" con filtro activo (iba siempre a la primera ventana), pins que difieren
+solo en la query, pin ancestro vs. pestaña hija, re-render que sacaba el foco del teclado, carga
+lenta que pisaba una más nueva, carrera de escritura de pins, pin cuya pestaña se cierra dentro del
+lote, redirect http→https, fallback popup sin `onStartup`/`onInstalled`, diagnóstico con textos
+fijos (se eliminó: era del spike), "Quitar" ambiguo en español (ahora "Desfijar"), etiquetas
+accesibles con el título de la pestaña y `aria-current` en la activa.
+
+Límites conocidos: con 3 o más ventanas el botón de mover recorre las ventanas en círculo (el
+destino exacto es por arrastre); no hay reordenar con teclado; el test de arrastre con input real
+de CDP falló 2 de 8 corridas por motivos del arnés que no se pudieron aislar (las demás pasaron y
+el resultado de la pestaña movida fue siempre el esperado).

@@ -1,15 +1,16 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { normalizeUrl, matchPin, buildView, filterView, addPin, removePin, dropIndex } from '../src/model.js';
+import { normalizeUrl, matchPin, buildView, filterView, addPin, removePin, dropIndex, nextWindowId } from '../src/model.js';
 
 const tab = (id, windowId, url, extra = {}) => ({ id, windowId, url, title: '', active: false, ...extra });
 const win = (id, left, tabs, extra = {}) => ({ id, left, type: 'normal', incognito: false, state: 'normal', tabs, ...extra });
 const opts = { currentWindowId: 1, emptyTitle: 'New tab' };
 
-test('normalizeUrl ignora hash, query, barra final y mayúsculas del host', () => {
-  assert.deepEqual(normalizeUrl('HTTPS://Example.com/a/b/?q=1#top'), { origin: 'https://example.com', path: '/a/b' });
-  assert.deepEqual(normalizeUrl('https://example.com/'), { origin: 'https://example.com', path: '' });
-  assert.deepEqual(normalizeUrl('https://example.com:443/x'), { origin: 'https://example.com', path: '/x' });
+test('normalizeUrl ignora hash, barra final y mayúsculas del host y conserva la query', () => {
+  assert.deepEqual(normalizeUrl('HTTPS://Example.com/a/b/?q=1#top'), { host: 'example.com', path: '/a/b', search: '?q=1' });
+  assert.deepEqual(normalizeUrl('https://example.com/'), { host: 'example.com', path: '', search: '' });
+  assert.deepEqual(normalizeUrl('https://example.com:443/x'), { host: 'example.com', path: '/x', search: '' });
+  assert.deepEqual(normalizeUrl('http://10.0.0.1:3000/x'), { host: '10.0.0.1:3000', path: '/x', search: '' });
 });
 
 test('normalizeUrl rechaza lo que no es http(s) o no parsea', () => {
@@ -26,12 +27,22 @@ test('matchPin: el pin de la raíz cubre el redirect de Gmail', () => {
   assert.equal(matchPin(pin, tabs, 1).id, 7);
 });
 
-test('matchPin: respeta el límite de segmento y el origen', () => {
+test('matchPin: respeta el límite de segmento y el sitio, e ignora la query', () => {
   const pin = { url: 'https://example.com/docs' };
   assert.equal(matchPin(pin, [tab(1, 1, 'https://example.com/docs/api')], 1).id, 1);
+  assert.equal(matchPin(pin, [tab(1, 1, 'https://example.com/docs?page=2')], 1).id, 1);
   assert.equal(matchPin(pin, [tab(1, 1, 'https://example.com/docs-old')], 1), undefined);
   assert.equal(matchPin(pin, [tab(1, 1, 'https://other.com/docs')], 1), undefined);
-  assert.equal(matchPin(pin, [tab(1, 1, 'http://example.com/docs')], 1), undefined);
+  assert.equal(matchPin(pin, [tab(1, 1, 'https://example.com:8443/docs')], 1), undefined);
+});
+
+test('matchPin: http y https del mismo sitio cuentan como uno (redirect a https)', () => {
+  assert.equal(matchPin({ url: 'http://example.com/app' }, [tab(9, 1, 'https://example.com/app/login')], 1).id, 9);
+});
+
+test('matchPin: sin pestañas o con un pin que no es http(s) no hay coincidencia', () => {
+  assert.equal(matchPin({ url: 'https://example.com/' }, [], 1), undefined);
+  assert.equal(matchPin({ url: 'chrome://settings' }, [tab(1, 1, 'https://example.com/')], 1), undefined);
 });
 
 test('matchPin: prefiere la ventana actual y luego la pestaña activa', () => {
@@ -46,6 +57,11 @@ test('matchPin: prefiere la ventana actual y luego la pestaña activa', () => {
   assert.equal(matchPin(pin, tabs, 99).id, 1);
 });
 
+test('matchPin: con el mismo rango gana la primera pestaña', () => {
+  const tabs = [tab(1, 2, 'https://example.com/a'), tab(2, 2, 'https://example.com/b')];
+  assert.equal(matchPin({ url: 'https://example.com/' }, tabs, 1).id, 1);
+});
+
 test('buildView ordena ventanas por left y excluye popups e incognito', () => {
   const windows = [
     win(10, 1920, [tab(1, 10, 'https://b.com/')]),
@@ -55,6 +71,16 @@ test('buildView ordena ventanas por left y excluye popups e incognito', () => {
   ];
   const view = buildView(windows, [], { ...opts, currentWindowId: 10 });
   assert.deepEqual(view.windows.map((w) => [w.id, w.isCurrent]), [[20, false], [10, true]]);
+});
+
+test('buildView desempata ventanas con el mismo left por id y tolera left y tabs ausentes', () => {
+  const windows = [
+    { id: 30, type: 'normal', incognito: false, state: 'normal' },
+    win(20, undefined, [tab(1, 20, 'https://a.com/')]),
+    win(10, 0, []),
+  ];
+  const view = buildView(windows, [], opts);
+  assert.deepEqual(view.windows.map((w) => [w.id, w.tabs.length]), [[10, 0], [20, 1], [30, 0]]);
 });
 
 test('buildView arma el título con título, url, pendingUrl y texto vacío', () => {
@@ -68,13 +94,34 @@ test('buildView arma el título con título, url, pendingUrl y texto vacío', ()
   assert.deepEqual(titles, ['Hola', 'https://b.com/', 'https://c.com/', 'New tab']);
 });
 
-test('buildView marca pinId, openTabId y minimizada', () => {
+test('buildView conserva index y discarded de cada pestaña', () => {
+  const windows = [win(1, 0, [{ id: 5, index: 3, url: 'https://a.com/', title: 'A', discarded: true }])];
+  const [first] = buildView(windows, [], opts).windows[0].tabs;
+  assert.equal(first.index, 3);
+  assert.equal(first.discarded, true);
+});
+
+test('buildView marca openTabId y minimizada', () => {
   const pins = [{ id: 'p1', url: 'https://a.com/x', title: 'A', favIconUrl: '' }, { id: 'p2', url: 'https://z.com/', title: 'Z', favIconUrl: '' }];
   const windows = [win(1, 0, [{ id: 5, index: 0, url: 'https://a.com/x/y', title: 'T' }], { state: 'minimized' })];
   const view = buildView(windows, pins, opts);
-  assert.equal(view.windows[0].tabs[0].pinId, 'p1');
   assert.equal(view.windows[0].minimized, true);
   assert.deepEqual(view.pins.map((p) => [p.id, p.openTabId]), [['p1', 5], ['p2', null]]);
+});
+
+test('pinId solo se asigna con la misma dirección exacta, no con un pin ancestro', () => {
+  const pins = [
+    { id: 'root', url: 'https://a.com/', title: 'A', favIconUrl: '' },
+    { id: 'video1', url: 'https://a.com/watch?v=1', title: 'V', favIconUrl: '' },
+  ];
+  const windows = [win(1, 0, [
+    { id: 1, index: 0, url: 'https://a.com/', title: 'raíz' },
+    { id: 2, index: 1, url: 'https://a.com/x', title: 'x' },
+    { id: 3, index: 2, url: 'https://a.com/watch?v=1#t=5', title: 'v1' },
+    { id: 4, index: 3, url: 'https://a.com/watch?v=2', title: 'v2' },
+  ])];
+  const ids = buildView(windows, pins, opts).windows[0].tabs.map((x) => x.pinId);
+  assert.deepEqual(ids, ['root', null, 'video1', null]);
 });
 
 test('filterView busca en título y url sin distinguir mayúsculas y descarta ventanas vacías', () => {
@@ -89,13 +136,31 @@ test('filterView busca en título y url sin distinguir mayúsculas y descarta ve
   assert.equal(filterView(view, '  '), view);
 });
 
-test('addPin agrega sin hash, ignora no http(s) y no duplica la misma ruta', () => {
+test('filterView también filtra los pins', () => {
+  const pins = [
+    { id: 'a', url: 'https://a.com/', title: 'Alfa', favIconUrl: '' },
+    { id: 'b', url: 'https://b.com/', title: 'Beta', favIconUrl: '' },
+  ];
+  const view = buildView([win(1, 0, [])], pins, opts);
+  assert.deepEqual(filterView(view, 'alf').pins.map((p) => p.id), ['a']);
+});
+
+test('addPin agrega sin hash, ignora no http(s) y no duplica la misma dirección', () => {
   const t1 = { url: 'https://a.com/x?q=1#frag', title: 'A', favIconUrl: 'https://a.com/i.png' };
   const once = addPin([], t1, 'id1');
   assert.deepEqual(once, [{ id: 'id1', url: 'https://a.com/x?q=1', title: 'A', favIconUrl: 'https://a.com/i.png' }]);
-  assert.equal(addPin(once, { url: 'https://a.com/x/#otro', title: 'A' }, 'id2'), once);
+  assert.equal(addPin(once, { url: 'https://a.com/x/?q=1#otro', title: 'A' }, 'id2'), once);
   assert.equal(addPin(once, { url: 'chrome://settings', title: 'S' }, 'id3'), once);
   assert.equal(addPin(once, { url: 'https://a.com/x/y', title: 'Y' }, 'id4').length, 2);
+});
+
+test('addPin distingue direcciones que solo difieren en la query', () => {
+  const first = addPin([], { url: 'https://youtube.com/watch?v=1', title: 'Uno' }, 'a');
+  assert.equal(addPin(first, { url: 'https://youtube.com/watch?v=2', title: 'Dos' }, 'b').length, 2);
+});
+
+test('addPin usa la url como título si la pestaña no tiene', () => {
+  assert.equal(addPin([], { url: 'https://a.com/x', title: '' }, 'id')[0].title, 'https://a.com/x');
 });
 
 test('removePin quita solo el id indicado', () => {
@@ -106,5 +171,13 @@ test('dropIndex corrige el desplazamiento solo dentro de la misma ventana', () =
   assert.equal(dropIndex({ fromWindowId: 1, fromIndex: 1, toWindowId: 1, insertBefore: 4 }), 3);
   assert.equal(dropIndex({ fromWindowId: 1, fromIndex: 3, toWindowId: 1, insertBefore: 1 }), 1);
   assert.equal(dropIndex({ fromWindowId: 1, fromIndex: 2, toWindowId: 1, insertBefore: 2 }), 2);
+  assert.equal(dropIndex({ fromWindowId: 1, fromIndex: 2, toWindowId: 1, insertBefore: 3 }), 2);
   assert.equal(dropIndex({ fromWindowId: 1, fromIndex: 1, toWindowId: 2, insertBefore: 4 }), 4);
+});
+
+test('nextWindowId avanza en círculo y sirve con la id de una ventana ya filtrada', () => {
+  const windows = [{ id: 10 }, { id: 20 }, { id: 30 }];
+  assert.equal(nextWindowId(windows, 10), 20);
+  assert.equal(nextWindowId(windows, 30), 10);
+  assert.equal(nextWindowId(windows, 20), 30);
 });

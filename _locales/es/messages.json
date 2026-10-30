@@ -13,9 +13,8 @@
   "minimizedWindow": { "message": "minimizada" },
   "emptyTabTitle": { "message": "Nueva pestaña" },
   "pinTab": { "message": "Fijar" },
-  "unpinTab": { "message": "Quitar" },
+  "unpinTab": { "message": "Desfijar" },
   "moveToOtherWindow": { "message": "Mover a la otra ventana" },
-  "diagnosticsHeading": { "message": "Diagnóstico" },
   "errorGeneric": {
     "message": "Algo salió mal: $DETAIL$",
     "placeholders": { "detail": { "content": "$1", "example": "No se pueden editar las pestañas ahora." } }
