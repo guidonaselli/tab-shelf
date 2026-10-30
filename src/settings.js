@@ -5,7 +5,8 @@ globalThis.ztsSettings = (() => {
   const WIDTHS = [280, 340, 440, 560];
   const ZONES = [4, 16, 32];
   const SPEEDS = { fast: { reveal: 100, hide: 200 }, normal: { reveal: 200, hide: 350 }, slow: { reveal: 400, hide: 600 } };
-  const DEFAULTS = { side: 'left', mode: 'hover', width: 340, opacity: 100, accent: '', zone: 32, speed: 'normal', disabledHosts: [] };
+  const DENSITIES = ['comfortable', 'compact'];
+  const DEFAULTS = { side: 'left', mode: 'hover', width: 340, opacity: 100, accent: '', zone: 32, speed: 'normal', density: 'comfortable', disabledHosts: [] };
   const HOST = /^[a-z0-9]([a-z0-9.-]*[a-z0-9])?$/;
   const MAX_HOSTS = 200;
 
@@ -24,6 +25,7 @@ globalThis.ztsSettings = (() => {
       accent: /^#[0-9a-f]{6}$/i.test(raw?.accent) ? raw.accent : DEFAULTS.accent,
       zone: ZONES.includes(raw?.zone) ? raw.zone : DEFAULTS.zone,
       speed: Object.hasOwn(SPEEDS, raw?.speed) ? raw.speed : DEFAULTS.speed,
+      density: DENSITIES.includes(raw?.density) ? raw.density : DEFAULTS.density,
       disabledHosts: normalizeHosts(raw?.disabledHosts),
     };
   }

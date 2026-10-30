@@ -49,5 +49,18 @@
   "settingsSites": { "message": "Sites without the edge panel" },
   "sitesEmpty": { "message": "No sites disabled." },
   "siteDisable": { "message": "Disable here" },
-  "siteEnable": { "message": "Enable" }
+  "siteEnable": { "message": "Enable" },
+  "closeDuplicates": { "message": "Close $N$ duplicate tabs", "placeholders": { "n": { "content": "$1" } } },
+  "duplicateTab": { "message": "Duplicate of another tab" },
+  "moveToNewWindow": { "message": "New window" },
+  "collapseWindow": { "message": "Collapse or expand this window" },
+  "settingsDensity": { "message": "Density" },
+  "densityComfortable": { "message": "Comfortable" },
+  "densityCompact": { "message": "Compact" },
+  "settingsBackup": { "message": "Backup" },
+  "backupExport": { "message": "Export pins and settings" },
+  "backupImport": { "message": "Import" },
+  "backupImported": { "message": "Pins imported: $N$.", "placeholders": { "n": { "content": "$1" } } },
+  "backupInvalid": { "message": "That file is not a Tab Shelf backup." },
+  "reorderPin": { "message": "Drag to reorder" }
 }

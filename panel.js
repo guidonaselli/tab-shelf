@@ -1,4 +1,4 @@
-import { buildView, filterView, addPin, removePin, dropIndex, clickAction } from './src/model.js';
+import { buildView, filterView, addPin, removePin, dropIndex, clickAction, duplicateTabIds, movePin, parseBackup } from './src/model.js';
 import './src/settings.js';
 import { glyph } from './src/icons.js';
 
@@ -16,7 +16,8 @@ const isOverlay = overlayWindow !== null;
 const t = (key, ...substitutions) => chrome.i18n.getMessage(key, substitutions);
 const $ = (id) => document.getElementById(id);
 
-const state = { view: null, query: '', dragging: null, renderPending: false, renderSeq: 0, timer: 0, pendingFocus: null, settings: normalizeSettings(), host: '' };
+const state = { view: null, query: '', dragging: null, renderPending: false, renderSeq: 0, timer: 0, pendingFocus: null, settings: normalizeSettings(), host: '', pinDrag: null, collapsed: new Set(), dupIds: [] };
+const isDragging = () => state.dragging !== null || state.pinDrag !== null;
 
 function applyStaticText() {
   document.documentElement.lang = chrome.i18n.getUILanguage();
@@ -91,7 +92,7 @@ async function render() {
   try {
     const view = await loadView();
     if (seq !== state.renderSeq) return;
-    if (state.dragging) {
+    if (isDragging()) {
       state.renderPending = true;
       return;
     }
@@ -105,7 +106,7 @@ async function render() {
 // Los eventos de tabs llegan en ráfagas: un solo render por ventana de tiempo (no se reinicia, para no
 // quedar sin dibujar mientras sigan llegando eventos). Durante un arrastre se difiere.
 function scheduleRender() {
-  if (state.dragging) {
+  if (isDragging()) {
     state.renderPending = true;
     return;
   }
@@ -145,6 +146,7 @@ async function activate(tab, shift = false) {
 
 const focusTab = run(activate);
 
+const closeDuplicates = run(() => chrome.tabs.remove(state.dupIds));
 const closeTab = run((tab) => chrome.tabs.remove(tab.id));
 const toggleMute = run((tab) => chrome.tabs.update(tab.id, { muted: !tab.muted }));
 
@@ -165,6 +167,8 @@ const togglePin = run((tab) =>
 
 const unpin = run((pinId) => mutatePins((pins) => removePin(pins, pinId)));
 
+const moveToNewWindow = run((tabId) => chrome.windows.create({ tabId }));
+
 const moveTab = run(async (tabId, windowId, index) => {
   await chrome.tabs.move(tabId, { windowId, index });
 });
@@ -177,6 +181,7 @@ function clearDropMarks() {
 
 function endDrag() {
   state.dragging = null;
+  state.pinDrag = null;
   clearDropMarks();
   for (const row of document.querySelectorAll('.dragging')) row.classList.remove('dragging');
   if (state.renderPending) {
@@ -185,22 +190,17 @@ function endDrag() {
   }
 }
 
-// Una sola ventana de destino: botón directo. Varias: selector, para poder elegir la exacta con teclado.
+// Selector nativo invisible sobre el ícono: conserva su lista y su teclado. Una pestaña sola en su ventana no ofrece "ventana nueva".
 function moveControl(tab, destinations, key) {
   const label = `${t('moveToOtherWindow')}: ${tab.title}`;
   const number = (win) => String(state.view.windows.indexOf(win) + 1);
-  if (destinations.length === 1) {
-    const button = el('button', { type: 'button', className: 'action', title: t('moveToOtherWindow') }, glyph('move'));
-    button.addEventListener('click', () => moveTab(tab.id, destinations[0].id, -1));
-    button.dataset.focus = `${key}:move`;
-    button.setAttribute('aria-label', label);
-    return button;
+  const options = destinations.map((win) => el('option', { value: String(win.id), textContent: t('windowHeading', number(win)) }));
+  if (state.view.windows.find((w) => w.id === tab.windowId).tabs.length > 1) {
+    options.push(el('option', { value: 'new', textContent: t('moveToNewWindow') }));
   }
-  // el selector nativo va invisible sobre el ícono: se conserva su lista y su teclado
-  const select = el('select', {},
-    el('option', { value: '', textContent: t('moveToOtherWindow') }),
-    ...destinations.map((win) => el('option', { value: String(win.id), textContent: t('windowHeading', number(win)) })));
-  select.addEventListener('change', () => moveTab(tab.id, Number(select.value), -1));
+  if (options.length === 0) return null;
+  const select = el('select', {}, el('option', { value: '', textContent: t('moveToOtherWindow') }), ...options);
+  select.addEventListener('change', () => (select.value === 'new' ? moveToNewWindow(tab.id) : moveTab(tab.id, Number(select.value), -1)));
   select.dataset.focus = `${key}:move`;
   select.setAttribute('aria-label', label);
   return el('span', { className: 'action move-select', title: t('moveToOtherWindow') }, glyph('move'), select);
@@ -249,9 +249,14 @@ function tabRow(tab, inCurrentWindow) {
   row.classList.toggle('active', tab.active);
   row.classList.toggle('current', tab.active && inCurrentWindow);
   row.classList.toggle('discarded', tab.discarded);
+  if (state.dupIds.includes(tab.id)) {
+    row.classList.add('dup');
+    main.title = `${tab.url}\n${t('duplicateTab')}`;
+  }
 
   const destinations = state.view.windows.filter((w) => w.id !== tab.windowId);
-  if (destinations.length > 0) row.append(moveControl(tab, destinations, key));
+  const move = moveControl(tab, destinations, key);
+  if (move) row.append(move);
   row.append(close);
 
   main.setAttribute('aria-keyshortcuts', 'Alt+ArrowUp Alt+ArrowDown');
@@ -300,11 +305,22 @@ function tabRow(tab, inCurrentWindow) {
 }
 
 function windowSection(win, position) {
-  const heading = el('h2', { textContent: t('windowHeading', String(position)) });
-  if (win.isCurrent) heading.append(el('span', { className: 'tag', textContent: ` ${t('currentWindow')}` }));
-  if (win.minimized) heading.append(el('span', { className: 'tag', textContent: ` ${t('minimizedWindow')}` }));
+  // con una búsqueda activa se muestra todo: una ventana contraída ocultaría resultados
+  const collapsed = state.query.trim() === '' && state.collapsed.has(win.id);
+  const toggle = el('button', { type: 'button', className: 'collapse', title: t('collapseWindow') },
+    glyph('chevron'), el('span', { textContent: t('windowHeading', String(position)) }));
+  toggle.setAttribute('aria-expanded', String(!collapsed));
+  toggle.dataset.focus = `win:${win.id}:toggle`;
+  toggle.addEventListener('click', () => {
+    if (!state.collapsed.delete(win.id)) state.collapsed.add(win.id);
+    draw();
+  });
+  const heading = el('h2', {}, toggle, el('span', { className: 'count', textContent: String(win.tabs.length) }));
+  if (win.isCurrent) heading.append(el('span', { className: 'tag', textContent: t('currentWindow') }));
+  if (win.minimized) heading.append(el('span', { className: 'tag', textContent: t('minimizedWindow') }));
 
   const list = el('ul', { className: 'list' }, ...win.tabs.map((tab) => tabRow(tab, win.isCurrent)));
+  list.hidden = collapsed;
   const section = el('section', {}, heading, list);
   section.addEventListener('dragover', (event) => {
     if (!state.dragging) return;
@@ -330,10 +346,40 @@ function pinRow(pin) {
   remove.dataset.focus = `pin:${pin.id}:remove`;
   remove.setAttribute('aria-label', `${t('unpinTab')}: ${pin.title}`);
   remove.addEventListener('click', () => unpin(pin.id));
-  return el('li', { className: pin.openTabId === null ? 'row' : 'row active' }, main, remove);
+  const row = el('li', { className: pin.openTabId === null ? 'row' : 'row active', draggable: true }, main, remove);
+  row.title = t('reorderPin');
+  let after = false;
+  row.addEventListener('dragstart', (event) => {
+    state.pinDrag = { id: pin.id };
+    event.dataTransfer.setData(DRAG_TYPE, pin.id);
+    event.dataTransfer.effectAllowed = 'move';
+    row.classList.add('dragging');
+  });
+  row.addEventListener('dragend', endDrag);
+  row.addEventListener('dragover', (event) => {
+    if (!state.pinDrag) return;
+    event.preventDefault();
+    const rect = row.getBoundingClientRect();
+    after = event.clientY > rect.top + rect.height / 2;
+    clearDropMarks();
+    row.classList.add(after ? 'drop-after' : 'drop-before');
+  });
+  row.addEventListener('drop', (event) => {
+    if (!state.pinDrag) return;
+    event.preventDefault();
+    const { id } = state.pinDrag;
+    const pins = state.view.pins;
+    const beforeId = after ? (pins[pins.findIndex((p) => p.id === pin.id) + 1]?.id ?? null) : pin.id;
+    endDrag();
+    mutatePins((list) => movePin(list, id, beforeId));
+  });
+  return row;
 }
 
 function draw() {
+  state.dupIds = duplicateTabIds(state.view);
+  $('dup-bar').hidden = state.dupIds.length === 0;
+  $('dup-close').textContent = t('closeDuplicates', String(state.dupIds.length));
   // un render no debe sacarle el foco a quien navega con teclado
   const focused = state.pendingFocus ?? document.activeElement?.dataset?.focus;
   state.pendingFocus = null;
@@ -395,6 +441,8 @@ function showSettings(raw) {
   $('setting-accent').value = settings.accent || '#0b57d0';
   $('setting-zone').value = String(settings.zone);
   $('setting-speed').value = settings.speed;
+  $('setting-density').value = settings.density;
+  document.documentElement.dataset.density = settings.density;
   applyAccent(settings.accent);
   drawSites();
 }
@@ -416,6 +464,29 @@ function drawSites() {
 
 const saveSettings = run((patch) => chrome.storage.local.set({ settings: normalizeSettings({ ...state.settings, ...patch }) }));
 
+const exportBackup = run(async () => {
+  const backup = { app: 'tab-shelf', version: 1, pins: await readPins(), settings: state.settings };
+  const link = el('a', { href: URL.createObjectURL(new Blob([JSON.stringify(backup, null, 2)], { type: 'application/json' })), download: 'tab-shelf-backup.json' });
+  link.click();
+  setTimeout(() => URL.revokeObjectURL(link.href), 1000);
+});
+
+const importBackup = run(async (file) => {
+  const backup = parseBackup(await file.text(), normalizeSettings);
+  if (!backup) throw new Error(t('backupInvalid'));
+  let added = 0;
+  await mutatePins((pins) => {
+    const next = backup.pins.reduce((acc, pin) => addPin(acc, pin, crypto.randomUUID()), pins);
+    added = next.length - pins.length;
+    return next;
+  });
+  await saveSettings(backup.settings);
+  const status = $('status');
+  status.className = '';
+  status.textContent = t('backupImported', String(added));
+  status.hidden = false;
+});
+
 async function initSettings() {
   state.host = await currentHost();
   showSettings((await chrome.storage.local.get('settings')).settings);
@@ -426,6 +497,15 @@ async function initSettings() {
   fromSelect('setting-opacity', 'opacity', Number);
   fromSelect('setting-zone', 'zone', Number);
   fromSelect('setting-speed', 'speed');
+  fromSelect('setting-density', 'density');
+  $('dup-close').addEventListener('click', closeDuplicates);
+  $('backup-export').addEventListener('click', exportBackup);
+  $('backup-import').addEventListener('click', () => $('backup-file').click());
+  $('backup-file').addEventListener('change', async (event) => {
+    const [file] = event.target.files;
+    event.target.value = '';
+    if (file) await importBackup(file);
+  });
   $('setting-accent').addEventListener('input', () => applyAccent($('setting-accent').value));
   fromSelect('setting-accent', 'accent');
   $('accent-reset').addEventListener('click', () => saveSettings({ accent: '' }));

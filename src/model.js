@@ -107,3 +107,49 @@ export function clickAction({ tabWindowId, windowTabCount, hereWindowId, shift }
   if (tabWindowId === hereWindowId) return 'stay';
   return shift || windowTabCount === 1 ? 'go' : 'bring';
 }
+
+// Pestañas sobrantes entre las que apuntan a la misma dirección exacta: de cada grupo se conserva la activa, o la primera.
+export function duplicateTabIds(view) {
+  const groups = new Map();
+  for (const win of view.windows) {
+    for (const tab of win.tabs) {
+      const n = normalizeUrl(tab.url);
+      if (!n) continue;
+      const key = `${n.host}${n.path}${n.search}`;
+      groups.set(key, [...(groups.get(key) ?? []), tab]);
+    }
+  }
+  const extra = [];
+  for (const tabs of groups.values()) {
+    const keep = tabs.find((t) => t.active) ?? tabs[0];
+    for (const tab of tabs) if (tab !== keep) extra.push(tab.id);
+  }
+  return extra;
+}
+
+// Reordena un pin delante de `beforeId` (null: al final). Devuelve la misma lista si no cambia nada.
+export function movePin(pins, id, beforeId) {
+  const item = pins.find((p) => p.id === id);
+  if (!item) return pins;
+  const rest = pins.filter((p) => p.id !== id);
+  const at = beforeId === null ? rest.length : rest.findIndex((p) => p.id === beforeId);
+  if (at < 0) return pins;
+  rest.splice(at, 0, item);
+  return rest.every((p, i) => p === pins[i]) ? pins : rest;
+}
+
+// Lee una copia exportada: solo pins http(s) válidos y sin duplicados, y los ajustes normalizados. null si no es una copia.
+export function parseBackup(text, normalizeSettings) {
+  let data;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    return null;
+  }
+  if (data?.app !== 'tab-shelf' || !Array.isArray(data.pins)) return null;
+  const text_ = (v) => (typeof v === 'string' ? v : '');
+  const pins = data.pins
+    .filter((p) => typeof p?.url === 'string' && normalizeUrl(p.url))
+    .map((p) => ({ url: p.url, title: text_(p.title), favIconUrl: normalizeUrl(text_(p.favIconUrl)) ? p.favIconUrl : '' }));
+  return { pins, settings: normalizeSettings(data.settings) };
+}

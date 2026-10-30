@@ -12,6 +12,9 @@
 - Requires Chrome 123 (`light-dark()`); disabled in incognito; settings logic shared between the content script and the panel.
 - Settings: panel width (narrow to extra wide), opacity (50–100%) and accent color for the edge panel.
 
+- Duplicate tabs are dimmed and can be closed in one click; windows show their tab count and can be collapsed.
+- Move a tab to a new window; drag pins to reorder them; compact density; export and import pins and settings as JSON.
+
 ## 0.2.0
 
 - Edge panel on the left or right of any page, opened by hovering the edge.

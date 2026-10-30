@@ -24,6 +24,9 @@ the window you are working in.
   In the search box, `Enter` opens the first result and `↓` moves into the list; `↑` and `↓` walk the rows.
 - **Shared pins.** Pin a page once and it is available everywhere. Clicking a pin focuses the open tab or opens a new one.
 - **Move and reorder.** Drag tabs between windows, use the move selector on each row, or press `Alt+↑` / `Alt+↓` to reorder.
+- **Window sections.** Each window shows its tab count and can be collapsed. Moving a tab can also send it to a new window.
+- **Duplicates.** Tabs with the same address are dimmed and one button closes the extras, keeping the active one.
+- **Pins you can reorder** by dragging, and a JSON **backup** (export/import of pins and settings) in the settings. Density can be compact.
 - **Search**, light and dark themes, English and Spanish UI.
 - Also works as a regular side panel (click the toolbar icon).
 

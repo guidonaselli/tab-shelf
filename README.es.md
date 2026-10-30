@@ -15,6 +15,8 @@ compartidos que enfocan la pestaña abierta o abren una nueva.
 
 **Cerrar y silenciar.** Se cierra con el botón `x`, clic medio o `Supr`. Las pestañas con sonido muestran un botón de parlante para silenciarlas.
 
+**Ventanas, duplicados y pins.** Cada ventana muestra su cantidad de pestañas y se puede contraer. El selector de mover también ofrece una ventana nueva. Las pestañas con la misma dirección se atenúan y un botón cierra las sobrantes (conserva la activa). Los pins se reordenan arrastrando. En Ajustes hay densidad compacta y exportar/importar pins y ajustes en JSON.
+
 El ID de la extensión es fijo (`key` del manifest), así que los pins sobreviven a mover la carpeta.
 
 ## Teclado

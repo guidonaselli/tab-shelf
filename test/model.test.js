@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import '../src/settings.js';
-import { normalizeUrl, matchPin, buildView, filterView, addPin, removePin, dropIndex, clickAction } from '../src/model.js';
+import { normalizeUrl, matchPin, buildView, filterView, addPin, removePin, dropIndex, clickAction, duplicateTabIds, movePin, parseBackup } from '../src/model.js';
 
 const { normalizeSettings, isDisabledHost } = globalThis.ztsSettings;
 
@@ -179,14 +179,14 @@ test('dropIndex corrige el desplazamiento solo dentro de la misma ventana', () =
 });
 
 test('normalizeSettings completa los valores ausentes o inválidos con los defaults', () => {
-  const defaults = { side: 'left', mode: 'hover', width: 340, opacity: 100, accent: '', zone: 32, speed: 'normal', disabledHosts: [] };
+  const defaults = { side: 'left', mode: 'hover', width: 340, opacity: 100, accent: '', zone: 32, speed: 'normal', density: 'comfortable', disabledHosts: [] };
   assert.deepEqual(normalizeSettings(undefined), defaults);
   assert.deepEqual(
-    normalizeSettings({ side: 'right', mode: 'off', width: 440, accent: '#A1b2C3', opacity: 70, zone: 4, speed: 'slow', disabledHosts: ['a.com'] }),
-    { side: 'right', mode: 'off', width: 440, accent: '#A1b2C3', opacity: 70, zone: 4, speed: 'slow', disabledHosts: ['a.com'] },
+    normalizeSettings({ side: 'right', mode: 'off', width: 440, accent: '#A1b2C3', opacity: 70, zone: 4, speed: 'slow', density: 'compact', disabledHosts: ['a.com'] }),
+    { side: 'right', mode: 'off', width: 440, accent: '#A1b2C3', opacity: 70, zone: 4, speed: 'slow', density: 'compact', disabledHosts: ['a.com'] },
   );
   assert.deepEqual(
-    normalizeSettings({ side: 'top', mode: 5, width: 9999, accent: 'red', opacity: 10, zone: 7, speed: 'toString', disabledHosts: 'a.com' }),
+    normalizeSettings({ side: 'top', mode: 5, width: 9999, accent: 'red', opacity: 10, zone: 7, speed: 'toString', density: 'huge', disabledHosts: 'a.com' }),
     defaults,
   );
 });
@@ -218,4 +218,37 @@ test('clickAction: misma ventana se queda; otra ventana trae, salvo con Shift o 
   assert.equal(clickAction(base), 'bring');
   assert.equal(clickAction({ ...base, shift: true }), 'go');
   assert.equal(clickAction({ ...base, windowTabCount: 1 }), 'go');
+});
+
+test('duplicateTabIds conserva la activa (o la primera) de cada grupo y ignora lo que no es http(s)', () => {
+  const view = buildView([
+    win(1, 0, [tab(1, 1, 'https://a.com/x#t'), tab(2, 1, 'chrome://settings'), tab(3, 1, 'chrome://settings')]),
+    win(2, 1, [tab(4, 2, 'https://a.com/x', { active: true }), tab(5, 2, 'https://a.com/x?q=1'), tab(6, 2, 'https://a.com/x/')]),
+  ], [], opts);
+  assert.deepEqual(duplicateTabIds(view).sort(), [1, 6]);
+  assert.deepEqual(duplicateTabIds(buildView([win(1, 0, [tab(1, 1, 'https://a.com/')])], [], opts)), []);
+});
+
+test('movePin reordena delante de otro pin, al final con null, y no cambia nada si el destino no existe', () => {
+  const pins = [{ id: 'a' }, { id: 'b' }, { id: 'c' }];
+  assert.deepEqual(movePin(pins, 'c', 'a').map((p) => p.id), ['c', 'a', 'b']);
+  assert.deepEqual(movePin(pins, 'a', null).map((p) => p.id), ['b', 'c', 'a']);
+  assert.equal(movePin(pins, 'a', 'b'), pins);
+  assert.equal(movePin(pins, 'a', 'zzz'), pins);
+  assert.equal(movePin(pins, 'zzz', 'a'), pins);
+});
+
+test('parseBackup acepta solo copias de la extensión y descarta pins inválidos', () => {
+  const ns = globalThis.ztsSettings.normalizeSettings;
+  assert.equal(parseBackup('no json', ns), null);
+  assert.equal(parseBackup('{"app":"otra","pins":[]}', ns), null);
+  assert.equal(parseBackup('{"app":"tab-shelf"}', ns), null);
+  const got = parseBackup(JSON.stringify({
+    app: 'tab-shelf',
+    pins: [{ url: 'https://a.com/', title: 'A', favIconUrl: 'javascript:alert(1)' }, { url: 'chrome://x' }, { title: 'sin url' }, null, { url: 'https://b.com/', title: 5, favIconUrl: 'https://b.com/i.png' }],
+    settings: { side: 'right', width: 1 },
+  }), ns);
+  assert.deepEqual(got.pins.map((p) => [p.url, p.title, p.favIconUrl]), [['https://a.com/', 'A', ''], ['https://b.com/', '', 'https://b.com/i.png']]);
+  assert.equal(got.settings.side, 'right');
+  assert.equal(got.settings.width, 340);
 });

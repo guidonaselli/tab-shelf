@@ -49,5 +49,18 @@
   "settingsSites": { "message": "Sitios sin panel de borde" },
   "sitesEmpty": { "message": "Ningún sitio desactivado." },
   "siteDisable": { "message": "Desactivar aquí" },
-  "siteEnable": { "message": "Activar" }
+  "siteEnable": { "message": "Activar" },
+  "closeDuplicates": { "message": "Cerrar $N$ pestañas duplicadas", "placeholders": { "n": { "content": "$1" } } },
+  "duplicateTab": { "message": "Duplicada de otra pestaña" },
+  "moveToNewWindow": { "message": "Ventana nueva" },
+  "collapseWindow": { "message": "Contraer o expandir esta ventana" },
+  "settingsDensity": { "message": "Densidad" },
+  "densityComfortable": { "message": "Cómoda" },
+  "densityCompact": { "message": "Compacta" },
+  "settingsBackup": { "message": "Copia de seguridad" },
+  "backupExport": { "message": "Exportar pins y ajustes" },
+  "backupImport": { "message": "Importar" },
+  "backupImported": { "message": "Pins importados: $N$.", "placeholders": { "n": { "content": "$1" } } },
+  "backupInvalid": { "message": "Ese archivo no es una copia de Tab Shelf." },
+  "reorderPin": { "message": "Arrastrá para reordenar" }
 }

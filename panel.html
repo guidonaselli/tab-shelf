@@ -13,6 +13,7 @@
     </div>
     <p id="status" role="status" hidden></p>
     <div id="list-view">
+      <div id="dup-bar" class="dup-bar" hidden><button type="button" id="dup-close"></button></div>
       <section>
         <h2 data-i18n="pinsHeading"></h2>
         <ul id="pins" class="list"></ul>
@@ -63,6 +64,18 @@
           <option value="slow" data-i18n="speedSlow"></option>
         </select>
       </label>
+      <label><span data-i18n="settingsDensity"></span>
+        <select id="setting-density">
+          <option value="comfortable" data-i18n="densityComfortable"></option>
+          <option value="compact" data-i18n="densityCompact"></option>
+        </select>
+      </label>
+      <h2 data-i18n="settingsBackup"></h2>
+      <div class="backup">
+        <button type="button" id="backup-export" data-i18n="backupExport"></button>
+        <button type="button" id="backup-import" data-i18n="backupImport"></button>
+        <input type="file" id="backup-file" accept="application/json,.json" hidden>
+      </div>
       <h2 data-i18n="settingsSites"></h2>
       <div id="site-current" class="site-row" hidden>
         <span id="site-host" class="title"></span>
