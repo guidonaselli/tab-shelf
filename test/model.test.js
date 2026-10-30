@@ -177,7 +177,7 @@ test('dropIndex corrige el desplazamiento solo dentro de la misma ventana', () =
 });
 
 test('normalizeSettings completa los valores ausentes o inválidos con los defaults', () => {
-  assert.deepEqual(normalizeSettings(undefined), { side: 'left', mode: 'hover', width: 340, accent: '' });
-  assert.deepEqual(normalizeSettings({ side: 'right', mode: 'off', width: 440, accent: '#A1b2C3' }), { side: 'right', mode: 'off', width: 440, accent: '#A1b2C3' });
-  assert.deepEqual(normalizeSettings({ side: 'top', mode: 5, width: 9999, accent: 'red' }), { side: 'left', mode: 'hover', width: 340, accent: '' });
+  assert.deepEqual(normalizeSettings(undefined), { side: 'left', mode: 'hover', width: 340, accent: '', opacity: 100 });
+  assert.deepEqual(normalizeSettings({ side: 'right', mode: 'off', width: 440, accent: '#A1b2C3', opacity: 70 }), { side: 'right', mode: 'off', width: 440, accent: '#A1b2C3', opacity: 70 });
+  assert.deepEqual(normalizeSettings({ side: 'top', mode: 5, width: 9999, accent: 'red', opacity: 10 }), { side: 'left', mode: 'hover', width: 340, accent: '', opacity: 100 });
 });

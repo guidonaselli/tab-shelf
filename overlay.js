@@ -10,7 +10,7 @@
     .panel { position: fixed; top: 8px; z-index: 2147483647; width: var(--w); max-width: calc(90vw - 16px); height: calc(100vh - 16px);
       overflow: hidden; border-radius: 12px; visibility: hidden; transform: translateX(var(--off)); background: Canvas;
       box-shadow: 0 0 0 1px rgb(128 128 128 / 30%), 0 8px 24px rgb(0 0 0 / 30%); transition: transform 140ms cubic-bezier(.2, 0, 0, 1), visibility 140ms; }
-    .panel.open { visibility: visible; transform: none; }
+    .panel.open { opacity: var(--o); visibility: visible; transform: none; }
     :host([data-side=left]) { --off: calc(-100% - 16px); }
     :host([data-side=right]) { --off: calc(100% + 16px); }
     :host([data-side=left]) .panel { left: 8px; }
@@ -24,6 +24,7 @@
     side: raw?.side === 'right' ? 'right' : 'left',
     mode: raw?.mode === 'off' ? 'off' : 'hover',
     width: [280, 340, 440, 560].includes(raw?.width) ? raw.width : 340,
+    opacity: Number.isInteger(raw?.opacity) && raw.opacity >= 50 && raw.opacity <= 100 ? raw.opacity : 100,
   });
 
   let settings = normalizeSettings((await chrome.storage.local.get('settings')).settings);
@@ -89,6 +90,7 @@
     if (!ui) mount();
     ui.host.dataset.side = settings.side;
     ui.host.style.setProperty('--w', `${settings.width}px`);
+    ui.host.style.setProperty('--o', settings.opacity / 100);
   }
 
   // La zona se detecta por posición en el documento, no con un elemento: ningún elemento de la página puede taparla.

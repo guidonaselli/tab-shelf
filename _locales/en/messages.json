@@ -32,5 +32,6 @@
   "widthWide": { "message": "Wide" },
   "widthXWide": { "message": "Extra wide" },
   "settingsAccent": { "message": "Accent color" },
-  "accentReset": { "message": "Reset" }
+  "accentReset": { "message": "Reset" },
+  "settingsOpacity": { "message": "Opacity" }
 }

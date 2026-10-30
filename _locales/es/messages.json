@@ -32,5 +32,6 @@
   "widthWide": { "message": "Ancho" },
   "widthXWide": { "message": "Muy ancho" },
   "settingsAccent": { "message": "Color de acento" },
-  "accentReset": { "message": "Restablecer" }
+  "accentReset": { "message": "Restablecer" },
+  "settingsOpacity": { "message": "Opacidad" }
 }

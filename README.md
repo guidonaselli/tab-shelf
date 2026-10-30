@@ -11,7 +11,7 @@ the window you are working in.
 
 - **Tabs from all windows** in one panel, ordered by window position, so multi-monitor setups read left to right.
 - **Edge panel.** Hover the left or right edge of any web page and the panel slides over it. It closes when
-  the mouse leaves, on `Esc`, or when you click outside. Pick the side, the width and the accent color, or turn it off, in the settings.
+  the mouse leaves, on `Esc`, or when you click outside. Pick the side, width, opacity and accent color, or turn it off, in the settings.
 - **Click to bring here.** Clicking a tab from another window moves it to the window you are in and activates it.
 - **Shared pins.** Pin a page once and it is available everywhere. Clicking a pin focuses the open tab or opens a new one.
 - **Move and reorder.** Drag tabs between windows, use the move selector on each row, or press `Alt+↑` / `Alt+↓` to reorder.

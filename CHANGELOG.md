@@ -2,7 +2,7 @@
 
 ## Unreleased
 
-- Settings: panel width (narrow to extra wide) and accent color for the edge panel.
+- Settings: panel width (narrow to extra wide), opacity (50–100%) and accent color for the edge panel.
 
 ## 0.2.0
 

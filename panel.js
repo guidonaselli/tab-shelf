@@ -323,10 +323,11 @@ function subscribe() {
 }
 
 function showSettings(raw) {
-  const { side, mode, width, accent } = normalizeSettings(raw);
+  const { side, mode, width, accent, opacity } = normalizeSettings(raw);
   $('setting-side').value = side;
   $('setting-mode').value = mode;
   $('setting-width').value = String(width);
+  $('setting-opacity').value = String(opacity);
   $('setting-accent').value = accent || '#0b57d0';
   applyAccent(accent);
 }
@@ -343,12 +344,13 @@ async function initSettings() {
   const save = run(() => chrome.storage.local.set({
     settings: normalizeSettings({
       side: $('setting-side').value, mode: $('setting-mode').value,
-      width: Number($('setting-width').value), accent: accentChosen ? $('setting-accent').value : '',
+      width: Number($('setting-width').value), opacity: Number($('setting-opacity').value), accent: accentChosen ? $('setting-accent').value : '',
     }),
   }));
   $('setting-side').addEventListener('change', save);
   $('setting-mode').addEventListener('change', save);
   $('setting-width').addEventListener('change', save);
+  $('setting-opacity').addEventListener('change', save);
   $('setting-accent').addEventListener('input', () => { accentChosen = true; applyAccent($('setting-accent').value); });
   $('setting-accent').addEventListener('change', save);
   $('accent-reset').addEventListener('click', () => { accentChosen = false; applyAccent(''); save(); });
