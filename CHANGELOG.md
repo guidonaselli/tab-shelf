@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+## 0.3.0
+
 - Settings moved to their own view (sliders button next to the search box); new options for the trigger zone size and the open/close speed.
 - Turn the edge panel off per site; the panel also stays out of the way in full screen and while the page captures the pointer.
 - Close tabs from the panel (`x` button, middle click, `Delete`) and mute tabs that play sound.
