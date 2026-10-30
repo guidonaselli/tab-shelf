@@ -28,7 +28,10 @@
   let hideTimer = 0;
 
   function mount() {
+    // un script anterior (extensión recargada) deja su panel huérfano en la página
+    for (const stale of document.querySelectorAll('[data-zts-host]')) stale.remove();
     const host = document.createElement('div');
+    host.dataset.ztsHost = '';
     const root = host.attachShadow({ mode: 'closed' });
     const style = document.createElement('style');
     style.textContent = STYLE;

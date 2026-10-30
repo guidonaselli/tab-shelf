@@ -15,3 +15,9 @@ chrome.runtime.onStartup.addListener(configure);
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message === 'zts:window') sendResponse(sender.tab?.windowId);
 });
+
+// Al instalar o recargar la extensión las pestañas abiertas conservan un script huérfano: se reemplaza sin recargarlas
+chrome.runtime.onInstalled.addListener(async () => {
+  const tabs = await chrome.tabs.query({ url: ['http://*/*', 'https://*/*'] });
+  await Promise.allSettled(tabs.map((tab) => chrome.scripting.executeScript({ target: { tabId: tab.id }, files: ['overlay.js'] })));
+});
