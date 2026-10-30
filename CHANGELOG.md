@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- The settings view now adapts to narrow side panels (no fixed minimum width; controls wrap instead of overflowing).
+
 ## 0.3.0
 
 - Settings moved to their own view (sliders button next to the search box); new options for the trigger zone size and the open/close speed.
