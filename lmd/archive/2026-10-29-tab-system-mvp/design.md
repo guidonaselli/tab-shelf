@@ -126,6 +126,6 @@ izquierdo y el SO le da foco, el selector mueve a la ventana elegida y `Alt+↑`
 
 Límites conocidos: el arrastre con input real se verificó con el pipeline de CDP (6 de 6 corridas
 seguidas y en las verificaciones posteriores); 2 corridas anteriores no iniciaron el arrastre y
-coincidieron con otra actividad en el escritorio, pero la causa no se confirmó. El caso Gmail con
+no se pudieron reproducir (con la ventana del panel en segundo plano o en primer plano el arrastre inició 4 de 4 veces, así que el foco queda descartado como causa); la causa sigue sin conocerse. El caso Gmail con
 sesión real no se probó (requiere una cuenta): el pin se crea desde la URL final de la pestaña y se
 compara por sitio exacto (`mail.google.com` y `accounts.google.com` son sitios distintos).
