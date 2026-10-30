@@ -1,5 +1,5 @@
 {
-  "extName": { "message": "Zen Tab System" },
+  "extName": { "message": "Tab Shelf" },
   "extDescription": { "message": "Pestañas de todas las ventanas y pins compartidos en un panel lateral." },
   "searchPlaceholder": { "message": "Buscar pestañas" },
   "pinsHeading": { "message": "Pins" },

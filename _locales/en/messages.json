@@ -1,5 +1,5 @@
 {
-  "extName": { "message": "Zen Tab System" },
+  "extName": { "message": "Tab Shelf" },
   "extDescription": { "message": "Tabs from every window and shared pins in a side panel." },
   "searchPlaceholder": { "message": "Search tabs" },
   "pinsHeading": { "message": "Pins" },

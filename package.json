@@ -1,5 +1,10 @@
 {
+  "name": "tab-shelf",
+  "version": "0.1.0",
+  "description": "One tab list for every browser window: edge panel, shared pins and bring-tab-here for Chromium browsers.",
+  "license": "MIT",
   "private": true,
   "type": "module",
-  "scripts": { "test": "node --test" }
+  "scripts": { "test": "node --test" },
+  "engines": { "node": ">=20" }
 }
