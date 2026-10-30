@@ -92,14 +92,18 @@ async function render() {
   }
 }
 
-// Los eventos de tabs llegan en ráfagas; un re-render durante un arrastre destruiría el origen del drag.
+// Los eventos de tabs llegan en ráfagas: un solo render por ventana de tiempo (no se reinicia, para no
+// quedar sin dibujar mientras sigan llegando eventos). Durante un arrastre se difiere.
 function scheduleRender() {
   if (state.dragging) {
     state.renderPending = true;
     return;
   }
-  clearTimeout(state.timer);
-  state.timer = setTimeout(render, RENDER_DELAY_MS);
+  if (state.timer) return;
+  state.timer = setTimeout(() => {
+    state.timer = 0;
+    render();
+  }, RENDER_DELAY_MS);
 }
 
 function icon(favIconUrl, title) {
