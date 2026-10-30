@@ -1,4 +1,4 @@
-import { buildView, filterView, addPin, removePin, dropIndex, nextWindowId } from './src/model.js';
+import { buildView, filterView, addPin, removePin, dropIndex } from './src/model.js';
 
 const RENDER_DELAY_MS = 100;
 const DRAG_TYPE = 'application/x-zts-tab';
@@ -158,6 +158,25 @@ function endDrag() {
   }
 }
 
+// Una sola ventana de destino: botón directo. Varias: selector, para poder elegir la exacta con teclado.
+function moveControl(tab, destinations, key) {
+  const label = `${t('moveToOtherWindow')}: ${tab.title}`;
+  const number = (win) => String(state.view.windows.indexOf(win) + 1);
+  let control;
+  if (destinations.length === 1) {
+    control = el('button', { type: 'button', className: 'action', textContent: '↗', title: t('moveToOtherWindow') });
+    control.addEventListener('click', () => moveTab(tab.id, destinations[0].id, -1));
+  } else {
+    control = el('select', { className: 'action', title: t('moveToOtherWindow') },
+      el('option', { value: '', textContent: '↗' }),
+      ...destinations.map((win) => el('option', { value: String(win.id), textContent: t('windowHeading', number(win)) })));
+    control.addEventListener('change', () => moveTab(tab.id, Number(control.value), -1));
+  }
+  control.dataset.focus = `${key}:move`;
+  control.setAttribute('aria-label', label);
+  return control;
+}
+
 function tabRow(tab) {
   const key = `tab:${tab.id}`;
   const main = el('button', { type: 'button', className: 'main', title: tab.url },
@@ -176,14 +195,18 @@ function tabRow(tab) {
   row.classList.toggle('active', tab.active);
   row.classList.toggle('discarded', tab.discarded);
 
-  if (state.view.windows.length > 1) {
-    const label = `${t('moveToOtherWindow')}: ${tab.title}`;
-    const move = el('button', { type: 'button', className: 'action', textContent: '↗', title: t('moveToOtherWindow') });
-    move.dataset.focus = `${key}:move`;
-    move.setAttribute('aria-label', label);
-    move.addEventListener('click', () => moveTab(tab.id, nextWindowId(state.view.windows, tab.windowId), -1));
-    row.append(move);
-  }
+  const destinations = state.view.windows.filter((w) => w.id !== tab.windowId);
+  if (destinations.length > 0) row.append(moveControl(tab, destinations, key));
+
+  main.setAttribute('aria-keyshortcuts', 'Alt+ArrowUp Alt+ArrowDown');
+  main.addEventListener('keydown', (event) => {
+    const step = { ArrowUp: -1, ArrowDown: 1 }[event.key];
+    if (!event.altKey || step === undefined) return;
+    event.preventDefault();
+    const target = tab.index + step;
+    const count = state.view.windows.find((w) => w.id === tab.windowId).tabs.length;
+    if (target >= 0 && target < count) moveTab(tab.id, tab.windowId, target);
+  });
 
   let after = false;
   row.addEventListener('dragstart', (event) => {

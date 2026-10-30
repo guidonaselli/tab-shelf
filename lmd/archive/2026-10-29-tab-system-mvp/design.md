@@ -115,7 +115,17 @@ lote, redirect http→https, fallback popup sin `onStartup`/`onInstalled`, diagn
 fijos (se eliminó: era del spike), "Quitar" ambiguo en español (ahora "Desfijar"), etiquetas
 accesibles con el título de la pestaña y `aria-current` en la activa.
 
-Límites conocidos: con 3 o más ventanas el botón de mover recorre las ventanas en círculo (el
-destino exacto es por arrastre); no hay reordenar con teclado; el test de arrastre con input real
-de CDP falló 2 de 8 corridas por motivos del arnés que no se pudieron aislar (las demás pasaron y
-el resultado de la pestaña movida fue siempre el esperado).
+Después de la revisión: con 3 o más ventanas el control de mover es un selector que elige la
+ventana exacta (con una sola de destino sigue siendo un botón); `Alt+↑` / `Alt+↓` sobre una pestaña
+la reordena dentro de su ventana y el foco se conserva.
+
+Verificado en los dos monitores físicos de esta máquina (DISPLAY1 en x=-1920..0 y el principal en
+x=0..2560) con ventanas colocadas en `left` -1900, 200 y 1300: el panel las ordena por `left`
+(la del monitor izquierdo primero, con coordenada negativa), un clic salta a la ventana del monitor
+izquierdo y el SO le da foco, el selector mueve a la ventana elegida y `Alt+↑` reordena.
+
+Límites conocidos: el arrastre con input real se verificó con el pipeline de CDP (6 de 6 corridas
+seguidas y en las verificaciones posteriores); 2 corridas anteriores no iniciaron el arrastre y
+coincidieron con otra actividad en el escritorio, pero la causa no se confirmó. El caso Gmail con
+sesión real no se probó (requiere una cuenta): el pin se crea desde la URL final de la pestaña y se
+compara por sitio exacto (`mail.google.com` y `accounts.google.com` son sitios distintos).

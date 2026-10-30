@@ -98,8 +98,3 @@ export function dropIndex({ fromWindowId, fromIndex, toWindowId, insertBefore })
   if (fromWindowId === toWindowId && insertBefore > fromIndex) return insertBefore - 1;
   return insertBefore;
 }
-
-// Ventana siguiente en la lista (circular); sirve de destino del botón "mover a la otra ventana".
-export function nextWindowId(windows, windowId) {
-  return windows[(windows.findIndex((w) => w.id === windowId) + 1) % windows.length].id;
-}

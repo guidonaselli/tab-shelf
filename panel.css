@@ -17,6 +17,7 @@ button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); ou
 .main { flex: 1; min-width: 0; display: flex; align-items: center; gap: var(--gap); padding: 5px 6px; text-align: left; }
 .main span.title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .action { flex: none; padding: 4px 6px; opacity: 0; }
+select.action { font: inherit; color: inherit; background: transparent; border: 0; border-radius: 6px; cursor: pointer; }
 .row:hover .action, .row:focus-within .action, .action.on { opacity: 1; }
 .icon { flex: none; width: 16px; height: 16px; border-radius: 3px; }
 .icon.letter { display: inline-grid; place-items: center; font-size: 10px; background: var(--hover); }

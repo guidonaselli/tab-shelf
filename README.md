@@ -11,6 +11,11 @@ compartidos que enfocan la pestaña abierta o abren una nueva.
 
 El ID de la extensión es fijo (`key` del manifest), así que los pins sobreviven a mover la carpeta.
 
+## Teclado
+
+- `Alt+↑` / `Alt+↓` sobre una pestaña la reordena dentro de su ventana.
+- Con varias ventanas, el selector `↗` de cada fila mueve la pestaña a la ventana elegida.
+
 ## Tests
 
 `npm test` (usa `node --test`, sin dependencias).

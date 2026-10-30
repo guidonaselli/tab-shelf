@@ -1,6 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { normalizeUrl, matchPin, buildView, filterView, addPin, removePin, dropIndex, nextWindowId } from '../src/model.js';
+import { normalizeUrl, matchPin, buildView, filterView, addPin, removePin, dropIndex } from '../src/model.js';
 
 const tab = (id, windowId, url, extra = {}) => ({ id, windowId, url, title: '', active: false, ...extra });
 const win = (id, left, tabs, extra = {}) => ({ id, left, type: 'normal', incognito: false, state: 'normal', tabs, ...extra });
@@ -173,11 +173,4 @@ test('dropIndex corrige el desplazamiento solo dentro de la misma ventana', () =
   assert.equal(dropIndex({ fromWindowId: 1, fromIndex: 2, toWindowId: 1, insertBefore: 2 }), 2);
   assert.equal(dropIndex({ fromWindowId: 1, fromIndex: 2, toWindowId: 1, insertBefore: 3 }), 2);
   assert.equal(dropIndex({ fromWindowId: 1, fromIndex: 1, toWindowId: 2, insertBefore: 4 }), 4);
-});
-
-test('nextWindowId avanza en círculo y sirve con la id de una ventana ya filtrada', () => {
-  const windows = [{ id: 10 }, { id: 20 }, { id: 30 }];
-  assert.equal(nextWindowId(windows, 10), 20);
-  assert.equal(nextWindowId(windows, 30), 10);
-  assert.equal(nextWindowId(windows, 20), 30);
 });
