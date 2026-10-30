@@ -6,7 +6,7 @@
   const STYLE = `
     :host { all: initial; }
     .panel { position: fixed; top: 8px; z-index: 2147483647; width: var(--w); max-width: calc(90vw - 16px); height: calc(100vh - 16px);
-      overflow: hidden; border-radius: 12px; visibility: hidden; transform: translateX(var(--off)); background: Canvas;
+      overflow: hidden; border-radius: 12px; visibility: hidden; transform: translateX(var(--off)); color-scheme: light dark; background: light-dark(#f7f8f9, #1b1c1e);
       box-shadow: 0 0 0 1px rgb(128 128 128 / 30%), 0 8px 24px rgb(0 0 0 / 30%); transition: transform 140ms cubic-bezier(.2, 0, 0, 1), visibility 140ms; }
     .panel.open { opacity: var(--o); visibility: visible; transform: none; }
     :host([data-side=left]) { --off: calc(-100% - 16px); }

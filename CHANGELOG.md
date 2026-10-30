@@ -2,6 +2,8 @@
 
 ## Unreleased
 
+- Fixed a light flash when the panel opens in dark mode: the panel now has its own background before its stylesheet loads.
+
 - The settings view now adapts to narrow side panels (no fixed minimum width; controls wrap instead of overflowing).
 
 ## 0.3.0
