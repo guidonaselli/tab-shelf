@@ -177,7 +177,7 @@ test('dropIndex corrige el desplazamiento solo dentro de la misma ventana', () =
 });
 
 test('normalizeSettings completa los valores ausentes o inválidos con los defaults', () => {
-  assert.deepEqual(normalizeSettings(undefined), { side: 'right', mode: 'hover' });
+  assert.deepEqual(normalizeSettings(undefined), { side: 'left', mode: 'hover' });
   assert.deepEqual(normalizeSettings({ side: 'right', mode: 'off' }), { side: 'right', mode: 'off' });
-  assert.deepEqual(normalizeSettings({ side: 'top', mode: 5 }), { side: 'right', mode: 'hover' });
+  assert.deepEqual(normalizeSettings({ side: 'top', mode: 5 }), { side: 'left', mode: 'hover' });
 });

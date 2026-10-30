@@ -7,7 +7,9 @@
     <link rel="stylesheet" href="panel.css">
   </head>
   <body>
-    <input id="search" type="search" data-i18n-placeholder="searchPlaceholder" data-i18n-label="searchPlaceholder">
+    <div class="search">
+      <input id="search" type="search" data-i18n-placeholder="searchPlaceholder" data-i18n-label="searchPlaceholder">
+    </div>
     <p id="status" role="status" hidden></p>
     <section>
       <h2 data-i18n="pinsHeading"></h2>
@@ -17,7 +19,7 @@
     <div id="windows"></div>
     <p id="no-results" class="hint" data-i18n="noResults" hidden></p>
     <details id="settings">
-      <summary data-i18n="settingsHeading"></summary>
+      <summary><span data-i18n="settingsHeading"></span></summary>
       <label><span data-i18n="settingsSide"></span>
         <select id="setting-side">
           <option value="left" data-i18n="sideLeft"></option>

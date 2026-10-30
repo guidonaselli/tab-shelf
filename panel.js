@@ -1,5 +1,6 @@
 import { buildView, filterView, addPin, removePin, dropIndex } from './src/model.js';
 import { normalizeSettings } from './src/settings.js';
+import { glyph } from './src/icons.js';
 
 const RENDER_DELAY_MS = 100;
 const DRAG_TYPE = 'application/x-zts-tab';
@@ -112,7 +113,7 @@ function scheduleRender() {
   }, RENDER_DELAY_MS);
 }
 
-function icon(favIconUrl, title) {
+function favicon(favIconUrl, title) {
   const letter = () => el('span', { className: 'icon letter', textContent: (Array.from(title.trim())[0] ?? '?').toUpperCase() });
   if (!favIconUrl) return letter();
   const img = el('img', { className: 'icon', alt: '', src: favIconUrl, referrerPolicy: 'no-referrer' });
@@ -180,37 +181,40 @@ function endDrag() {
 function moveControl(tab, destinations, key) {
   const label = `${t('moveToOtherWindow')}: ${tab.title}`;
   const number = (win) => String(state.view.windows.indexOf(win) + 1);
-  let control;
   if (destinations.length === 1) {
-    control = el('button', { type: 'button', className: 'action', textContent: '↗', title: t('moveToOtherWindow') });
-    control.addEventListener('click', () => moveTab(tab.id, destinations[0].id, -1));
-  } else {
-    control = el('select', { className: 'action', title: t('moveToOtherWindow') },
-      el('option', { value: '', textContent: '↗' }),
-      ...destinations.map((win) => el('option', { value: String(win.id), textContent: t('windowHeading', number(win)) })));
-    control.addEventListener('change', () => moveTab(tab.id, Number(control.value), -1));
+    const button = el('button', { type: 'button', className: 'action', title: t('moveToOtherWindow') }, glyph('move'));
+    button.addEventListener('click', () => moveTab(tab.id, destinations[0].id, -1));
+    button.dataset.focus = `${key}:move`;
+    button.setAttribute('aria-label', label);
+    return button;
   }
-  control.dataset.focus = `${key}:move`;
-  control.setAttribute('aria-label', label);
-  return control;
+  // el selector nativo va invisible sobre el ícono: se conserva su lista y su teclado
+  const select = el('select', {},
+    el('option', { value: '', textContent: t('moveToOtherWindow') }),
+    ...destinations.map((win) => el('option', { value: String(win.id), textContent: t('windowHeading', number(win)) })));
+  select.addEventListener('change', () => moveTab(tab.id, Number(select.value), -1));
+  select.dataset.focus = `${key}:move`;
+  select.setAttribute('aria-label', label);
+  return el('span', { className: 'action move-select', title: t('moveToOtherWindow') }, glyph('move'), select);
 }
 
-function tabRow(tab) {
+function tabRow(tab, inCurrentWindow) {
   const key = `tab:${tab.id}`;
   const main = el('button', { type: 'button', className: 'main', title: tab.url },
-    icon(tab.favIconUrl, tab.title), el('span', { className: 'title', textContent: tab.title }));
+    favicon(tab.favIconUrl, tab.title), el('span', { className: 'title', textContent: tab.title }));
   main.dataset.focus = `${key}:main`;
   if (tab.active) main.setAttribute('aria-current', 'true');
   main.addEventListener('click', () => focusTab(tab));
 
   const pinLabel = tab.pinId ? t('unpinTab') : t('pinTab');
-  const pin = el('button', { type: 'button', className: tab.pinId ? 'action on' : 'action', textContent: pinLabel });
+  const pin = el('button', { type: 'button', className: tab.pinId ? 'action on' : 'action', title: pinLabel }, glyph('pin'));
   pin.dataset.focus = `${key}:pin`;
   pin.setAttribute('aria-label', `${pinLabel}: ${tab.title}`);
   pin.addEventListener('click', () => togglePin(tab));
 
   const row = el('li', { className: 'row', draggable: true }, main, pin);
   row.classList.toggle('active', tab.active);
+  row.classList.toggle('current', tab.active && inCurrentWindow);
   row.classList.toggle('discarded', tab.discarded);
 
   const destinations = state.view.windows.filter((w) => w.id !== tab.windowId);
@@ -260,7 +264,7 @@ function windowSection(win, position) {
   if (win.isCurrent) heading.append(el('span', { className: 'tag', textContent: ` ${t('currentWindow')}` }));
   if (win.minimized) heading.append(el('span', { className: 'tag', textContent: ` ${t('minimizedWindow')}` }));
 
-  const list = el('ul', { className: 'list' }, ...win.tabs.map(tabRow));
+  const list = el('ul', { className: 'list' }, ...win.tabs.map((tab) => tabRow(tab, win.isCurrent)));
   const section = el('section', {}, heading, list);
   section.addEventListener('dragover', (event) => {
     if (!state.dragging) return;
@@ -279,10 +283,10 @@ function windowSection(win, position) {
 
 function pinRow(pin) {
   const main = el('button', { type: 'button', className: 'main', title: pin.url },
-    icon(pin.favIconUrl, pin.title), el('span', { className: 'title', textContent: pin.title }));
+    favicon(pin.favIconUrl, pin.title), el('span', { className: 'title', textContent: pin.title }));
   main.dataset.focus = `pin:${pin.id}:main`;
   main.addEventListener('click', () => openOrFocus(pin));
-  const remove = el('button', { type: 'button', className: 'action', textContent: '×', title: t('unpinTab') });
+  const remove = el('button', { type: 'button', className: 'action', title: t('unpinTab') }, glyph('x'));
   remove.dataset.focus = `pin:${pin.id}:remove`;
   remove.setAttribute('aria-label', `${t('unpinTab')}: ${pin.title}`);
   remove.addEventListener('click', () => unpin(pin.id));
@@ -334,6 +338,8 @@ async function initSettings() {
 }
 
 applyStaticText();
+document.querySelector('.search').prepend(glyph('search'));
+document.querySelector('#settings summary').prepend(glyph('chevron'));
 $('search').addEventListener('input', (event) => {
   state.query = event.target.value;
   if (state.view) draw();

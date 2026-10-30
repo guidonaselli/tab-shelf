@@ -2,24 +2,22 @@
 (async () => {
   const { normalizeSettings } = await import(chrome.runtime.getURL('src/settings.js'));
 
-  const EDGE_PX = 14;
-  const HANDLE_PX = 3;
+  const ZONE_PX = 32;
   const WIDTH_PX = 340;
-  const REVEAL_DELAY_MS = 120;
+  const REVEAL_DELAY_MS = 200;
   const HIDE_DELAY_MS = 350;
   const EXTENSION_ORIGIN = new URL(chrome.runtime.getURL('')).origin;
 
   const STYLE = `
     :host { all: initial; }
-    .strip, .panel { position: fixed; top: 0; height: 100vh; z-index: 2147483647; }
-    .strip { width: ${EDGE_PX}px; background: linear-gradient(var(--toward), rgb(168 122 53 / 60%) ${HANDLE_PX}px, transparent ${HANDLE_PX}px); }
-    .panel { width: ${WIDTH_PX}px; max-width: 90vw; visibility: hidden; transform: translateX(var(--off));
-      transition: transform 120ms ease-out, visibility 120ms; background: Canvas; box-shadow: 0 0 12px rgb(0 0 0 / 35%); }
+    .panel { position: fixed; top: 8px; z-index: 2147483647; width: ${WIDTH_PX}px; max-width: calc(90vw - 16px); height: calc(100vh - 16px);
+      overflow: hidden; border-radius: 12px; visibility: hidden; transform: translateX(var(--off)); background: Canvas;
+      box-shadow: 0 0 0 1px rgb(128 128 128 / 30%), 0 8px 24px rgb(0 0 0 / 30%); transition: transform 140ms cubic-bezier(.2, 0, 0, 1), visibility 140ms; }
     .panel.open { visibility: visible; transform: none; }
-    :host([data-side=left]) { --off: -100%; --toward: to right; }
-    :host([data-side=right]) { --off: 100%; --toward: to left; }
-    :host([data-side=left]) .strip, :host([data-side=left]) .panel { left: 0; }
-    :host([data-side=right]) .strip, :host([data-side=right]) .panel { right: 0; }
+    :host([data-side=left]) { --off: calc(-100% - 16px); }
+    :host([data-side=right]) { --off: calc(100% + 16px); }
+    :host([data-side=left]) .panel { left: 8px; }
+    :host([data-side=right]) .panel { right: 8px; }
     iframe { width: 100%; height: 100%; border: 0; color-scheme: light dark; }
     @media (prefers-reduced-motion: reduce) { .panel { transition: none; } }
   `;
@@ -34,15 +32,11 @@
     const root = host.attachShadow({ mode: 'closed' });
     const style = document.createElement('style');
     style.textContent = STYLE;
-    const strip = document.createElement('div');
-    strip.className = 'strip';
     const panel = document.createElement('div');
     panel.className = 'panel';
-    root.append(style, strip, panel);
+    root.append(style, panel);
     document.documentElement.append(host);
 
-    strip.addEventListener('mouseenter', () => { revealTimer = setTimeout(show, REVEAL_DELAY_MS); });
-    strip.addEventListener('mouseleave', () => clearTimeout(revealTimer));
     panel.addEventListener('mouseenter', () => clearTimeout(hideTimer));
     // con el foco dentro del panel (escribiendo, select abierto) no se oculta al salir el mouse
     panel.addEventListener('mouseleave', () => {
@@ -53,6 +47,7 @@
 
   function unmount() {
     clearTimeout(revealTimer);
+    revealTimer = 0;
     clearTimeout(hideTimer);
     ui?.host.remove();
     ui = null;
@@ -87,6 +82,21 @@
     ui.host.dataset.side = settings.side;
   }
 
+  // La zona se detecta por posición en el documento, no con un elemento: ningún elemento de la página puede taparla.
+  function inZone(event) {
+    if (settings.side === 'left') return event.clientX <= ZONE_PX;
+    return event.clientX >= document.documentElement.clientWidth - ZONE_PX;
+  }
+
+  window.addEventListener('mousemove', (event) => {
+    if (!ui) return;
+    if (event.buttons === 0 && inZone(event)) {
+      if (!revealTimer) revealTimer = setTimeout(() => { revealTimer = 0; show(); }, REVEAL_DELAY_MS);
+    } else {
+      clearTimeout(revealTimer);
+      revealTimer = 0;
+    }
+  }, { capture: true, passive: true });
   document.addEventListener('pointerdown', (event) => {
     if (ui && !event.composedPath().includes(ui.host)) hide();
   }, true);

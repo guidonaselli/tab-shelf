@@ -1,6 +1,6 @@
 export const SIDES = ['left', 'right'];
 export const MODES = ['hover', 'off'];
-export const DEFAULT_SETTINGS = { side: 'right', mode: 'hover' };
+export const DEFAULT_SETTINGS = { side: 'left', mode: 'hover' };
 
 export function normalizeSettings(raw) {
   return {
