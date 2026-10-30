@@ -1,6 +1,6 @@
 # Changelog
 
-## Unreleased
+## 0.2.0
 
 - Edge panel on the left or right of any page, opened by hovering the edge.
 - Clicking a tab from another window brings it to the current one.

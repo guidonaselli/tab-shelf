@@ -1,6 +1,6 @@
 {
   "name": "tab-shelf",
-  "version": "0.1.0",
+  "version": "0.2.0",
   "description": "One tab list for every browser window: edge panel, shared pins and bring-tab-here for Chromium browsers.",
   "license": "MIT",
   "private": true,
