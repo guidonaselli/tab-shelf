@@ -124,8 +124,7 @@ x=0..2560) con ventanas colocadas en `left` -1900, 200 y 1300: el panel las orde
 (la del monitor izquierdo primero, con coordenada negativa), un clic salta a la ventana del monitor
 izquierdo y el SO le da foco, el selector mueve a la ventana elegida y `Alt+↑` reordena.
 
-Límites conocidos: el arrastre con input real se verificó con el pipeline de CDP (6 de 6 corridas
-seguidas y en las verificaciones posteriores); 2 corridas anteriores no iniciaron el arrastre y
-no se pudieron reproducir (con la ventana del panel en segundo plano o en primer plano el arrastre inició 4 de 4 veces, así que el foco queda descartado como causa); la causa sigue sin conocerse. El caso Gmail con
+Límites conocidos: el arrastre con input real se verificó con el pipeline de CDP. Los fallos
+intermitentes (`dragIntercepted:false`) vienen del banco de pruebas: tras maximizar y minimizar ventanas, la ventana del panel queda tapada y CDP no inicia el drag. Con `Target.activateTarget` sobre el panel antes de arrastrar, 3 de 3 corridas inician el drag; sin eso, 8 de 8 fallan, con el código viejo y con el nuevo. No es un defecto de la extensión. El caso Gmail con
 sesión real no se probó (requiere una cuenta): el pin se crea desde la URL final de la pestaña y se
 compara por sitio exacto (`mail.google.com` y `accounts.google.com` son sitios distintos).
