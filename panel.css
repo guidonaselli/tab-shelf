@@ -1,0 +1,26 @@
+:root { color-scheme: light dark; --gap: 6px; --accent: #4c8bf5; --hover: color-mix(in srgb, currentColor 10%, transparent); }
+* { box-sizing: border-box; }
+body { margin: 0; padding: 8px; min-width: 320px; font: 13px/1.35 system-ui, sans-serif; }
+h2 { margin: 12px 0 4px; font-size: 11px; font-weight: 600; text-transform: uppercase; letter-spacing: .04em; opacity: .7; }
+h2 .tag { margin-left: 6px; font-weight: 400; text-transform: none; letter-spacing: 0; }
+input[type=search] { width: 100%; padding: 6px 8px; font: inherit; color: inherit; background: transparent; border: 1px solid color-mix(in srgb, currentColor 30%, transparent); border-radius: 6px; }
+.list { margin: 0; padding: 0; list-style: none; }
+.row { display: flex; align-items: center; gap: 2px; border-radius: 6px; border-top: 2px solid transparent; border-bottom: 2px solid transparent; }
+.row:hover { background: var(--hover); }
+.row.active .main { font-weight: 600; }
+.row.dragging { opacity: .4; }
+.row.drop-before { border-top-color: var(--accent); }
+.row.drop-after { border-bottom-color: var(--accent); }
+.row.discarded .main { opacity: .6; }
+button { font: inherit; color: inherit; background: none; border: 0; border-radius: 6px; cursor: pointer; }
+button:focus-visible, input:focus-visible { outline: 2px solid var(--accent); outline-offset: -1px; }
+.main { flex: 1; min-width: 0; display: flex; align-items: center; gap: var(--gap); padding: 5px 6px; text-align: left; }
+.main span.title { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.action { flex: none; padding: 4px 6px; opacity: 0; }
+.row:hover .action, .row:focus-within .action, .action.on { opacity: 1; }
+.icon { flex: none; width: 16px; height: 16px; border-radius: 3px; }
+.icon.letter { display: inline-grid; place-items: center; font-size: 10px; background: var(--hover); }
+.hint { margin: 8px 6px; opacity: .7; }
+.error { margin: 8px 0; padding: 6px 8px; border-radius: 6px; background: color-mix(in srgb, #d33 25%, transparent); }
+details { margin-top: 14px; opacity: .8; }
+pre { white-space: pre-wrap; word-break: break-all; font-size: 11px; }

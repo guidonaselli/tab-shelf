@@ -1,0 +1,23 @@
+{
+  "extName": { "message": "Zen Tab System" },
+  "extDescription": { "message": "Pestañas de todas las ventanas y pins compartidos en un panel lateral." },
+  "searchPlaceholder": { "message": "Buscar pestañas" },
+  "pinsHeading": { "message": "Pins" },
+  "pinsEmpty": { "message": "Todavía no hay pins. Usá el botón de pin en cualquier pestaña." },
+  "noResults": { "message": "No hay pestañas que coincidan." },
+  "windowHeading": {
+    "message": "Ventana $INDEX$",
+    "placeholders": { "index": { "content": "$1", "example": "1" } }
+  },
+  "currentWindow": { "message": "esta ventana" },
+  "minimizedWindow": { "message": "minimizada" },
+  "emptyTabTitle": { "message": "Nueva pestaña" },
+  "pinTab": { "message": "Fijar" },
+  "unpinTab": { "message": "Quitar" },
+  "moveToOtherWindow": { "message": "Mover a la otra ventana" },
+  "diagnosticsHeading": { "message": "Diagnóstico" },
+  "errorGeneric": {
+    "message": "Algo salió mal: $DETAIL$",
+    "placeholders": { "detail": { "content": "$1", "example": "No se pueden editar las pestañas ahora." } }
+  }
+}

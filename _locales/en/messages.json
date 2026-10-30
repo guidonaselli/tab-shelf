@@ -1,0 +1,23 @@
+{
+  "extName": { "message": "Zen Tab System" },
+  "extDescription": { "message": "Tabs from every window and shared pins in a side panel." },
+  "searchPlaceholder": { "message": "Search tabs" },
+  "pinsHeading": { "message": "Pins" },
+  "pinsEmpty": { "message": "No pins yet. Use the pin button on any tab." },
+  "noResults": { "message": "No matching tabs." },
+  "windowHeading": {
+    "message": "Window $INDEX$",
+    "placeholders": { "index": { "content": "$1", "example": "1" } }
+  },
+  "currentWindow": { "message": "this window" },
+  "minimizedWindow": { "message": "minimized" },
+  "emptyTabTitle": { "message": "New tab" },
+  "pinTab": { "message": "Pin" },
+  "unpinTab": { "message": "Unpin" },
+  "moveToOtherWindow": { "message": "Move to the other window" },
+  "diagnosticsHeading": { "message": "Diagnostics" },
+  "errorGeneric": {
+    "message": "Something went wrong: $DETAIL$",
+    "placeholders": { "detail": { "content": "$1", "example": "Tabs cannot be edited right now." } }
+  }
+}
