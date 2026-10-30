@@ -2,7 +2,8 @@
 (async () => {
   const { normalizeSettings } = await import(chrome.runtime.getURL('src/settings.js'));
 
-  const EDGE_PX = 5;
+  const EDGE_PX = 14;
+  const HANDLE_PX = 3;
   const WIDTH_PX = 340;
   const REVEAL_DELAY_MS = 120;
   const HIDE_DELAY_MS = 350;
@@ -11,12 +12,12 @@
   const STYLE = `
     :host { all: initial; }
     .strip, .panel { position: fixed; top: 0; height: 100vh; z-index: 2147483647; }
-    .strip { width: ${EDGE_PX}px; background: rgb(168 122 53 / 40%); }
+    .strip { width: ${EDGE_PX}px; background: linear-gradient(var(--toward), rgb(168 122 53 / 60%) ${HANDLE_PX}px, transparent ${HANDLE_PX}px); }
     .panel { width: ${WIDTH_PX}px; max-width: 90vw; visibility: hidden; transform: translateX(var(--off));
       transition: transform 120ms ease-out, visibility 120ms; background: Canvas; box-shadow: 0 0 12px rgb(0 0 0 / 35%); }
     .panel.open { visibility: visible; transform: none; }
-    :host([data-side=left]) { --off: -100%; }
-    :host([data-side=right]) { --off: 100%; }
+    :host([data-side=left]) { --off: -100%; --toward: to right; }
+    :host([data-side=right]) { --off: 100%; --toward: to left; }
     :host([data-side=left]) .strip, :host([data-side=left]) .panel { left: 0; }
     :host([data-side=right]) .strip, :host([data-side=right]) .panel { right: 0; }
     iframe { width: 100%; height: 100%; border: 0; color-scheme: light dark; }
