@@ -93,24 +93,20 @@ function icon(favIconUrl, title) {
 }
 
 function findTab(tabId) {
-  for (const w of state.view.windows) {
-    const tab = w.tabs.find((x) => x.id === tabId);
-    if (tab) return { tab, window: w };
-  }
-  return null;
+  return state.view.windows.flatMap((w) => w.tabs).find((tab) => tab.id === tabId) ?? null;
 }
 
-async function activate(tab, win) {
+// focused:true también restaura una ventana minimizada (verificado en Helium)
+async function activate(tab) {
   await chrome.tabs.update(tab.id, { active: true });
-  // shortcut: restaurar a 'normal' desinmaximiza; solo se usa si la ventana está minimizada
-  await chrome.windows.update(tab.windowId, win.minimized ? { focused: true, state: 'normal' } : { focused: true });
+  await chrome.windows.update(tab.windowId, { focused: true });
 }
 
 const focusTab = run(activate);
 
 const openOrFocus = run(async (pin) => {
-  const found = pin.openTabId === null ? null : findTab(pin.openTabId);
-  if (found) return activate(found.tab, found.window);
+  const open = pin.openTabId === null ? null : findTab(pin.openTabId);
+  if (open) return activate(open);
   await chrome.tabs.create({ url: pin.url, windowId: await currentWindowId() });
 });
 
@@ -152,7 +148,7 @@ function endDrag() {
 function tabRow(tab, win) {
   const main = el('button', { type: 'button', className: 'main', title: tab.url },
     icon(tab.favIconUrl, tab.title), el('span', { className: 'title', textContent: tab.title }));
-  main.addEventListener('click', () => focusTab(tab, win));
+  main.addEventListener('click', () => focusTab(tab));
 
   const pin = el('button', {
     type: 'button',

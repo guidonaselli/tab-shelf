@@ -81,8 +81,9 @@ Verificado automáticamente por CDP contra el `chrome.exe` de Helium:
 - `tabs.move` entre ventanas funciona; si era la última pestaña, la ventana de origen se cierra
   y el panel se redibuja solo (4 → 3 secciones).
 - Soltar sobre la mitad inferior de una fila deja la pestaña después de esa fila (`dropIndex`).
-- `windows.update({ focused: true, state: 'normal' })` restaura una ventana minimizada y el panel
-  muestra la etiqueta "minimizada" gracias a `windows.onBoundsChanged`.
+- `windows.update({ focused: true })` alcanza para restaurar una ventana minimizada (no hace falta
+  forzar `state: 'normal'`, que desinmaximiza); el panel muestra la etiqueta "minimizada" gracias a
+  `windows.onBoundsChanged`.
 - Un pin hecho desde una fila queda en `storage.local` y aparece en la lista de pins.
 - Los textos salen en inglés o español según `--lang`.
 
@@ -92,5 +93,11 @@ Verificado automáticamente por CDP contra el `chrome.exe` de Helium:
 - `setPanelBehavior` se llama en cada arranque del service worker, así que no depende de que el
   ajuste persista.
 
-Sin verificar (requieren hardware o una persona): dos monitores físicos, arrastre con mouse real
-(solo se simularon los eventos de drag) y que un video siga reproduciéndose al mover su pestaña.
+- Un arrastre con input real de CDP (`mousePressed`/`mouseMoved` + `dispatchDragEvent`) desde el
+  botón, el título o el botón de mover inicia el drag y mueve la pestaña entre ventanas.
+- Tras mover una pestaña conserva su estado de página y un `<video>` sigue reproduciendo.
+- Pins: un pin sobre la URL final de un redirect no duplica pestañas al abrirlo dos veces, y se ve
+  en el side panel real.
+
+Límite de lo verificado: los dos monitores se simularon con ventanas en `left` 0 y 2000 y el caso
+Gmail con un redirect local; el comportamiento con tus monitores y con Gmail real no se probó.

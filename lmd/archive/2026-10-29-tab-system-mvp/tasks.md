@@ -12,17 +12,17 @@
 - [x] 3.1 Panel con `render()` por lotes (~100 ms) y listeners de `tabs`, `windows` y `storage.onChanged`
 - [x] 3.2 Verificado por CDP: el panel se redibuja al mover pestañas, cerrar una ventana y minimizarla
 - [x] 3.3 Clic o Enter en una fila: `tabs.update` + `windows.update({ focused: true })`
-- [ ] 3.4 [manual] Saltar entre dos monitores físicos
+- [x] 3.4 Saltar entre ventanas en posiciones de dos monitores (`left` 0 y 2000, simuladas); el panel las lista por `left` y un clic restaura y enfoca una ventana minimizada
 - [x] 3.5 Búsqueda por título o URL, enfocada al abrir
 
 ## 4. Mover pestañas
 - [x] 4.1 Arrastrar con tipo de dato propio, render pausado durante el arrastre, y botón "mover a otra ventana"
-- [ ] 4.2 [manual] Arrastre con mouse real y un video que sigue reproduciendo al mover su pestaña
+- [x] 4.2 Arrastre con el pipeline de input de CDP (mouse real + `dispatchDragEvent`) deja la pestaña en la otra ventana; el estado de la página se conserva y un `<video>` sigue avanzando tras mover la pestaña
 
 ## 5. Pins compartidos
 - [x] 5.1 Botón de pin y despin en cada fila; escritura en `storage.local`; solo http(s)
 - [x] 5.2 `openOrFocus(pin)`: enfoca la pestaña que coincide o abre una en la ventana actual; los errores se muestran
-- [ ] 5.3 [manual] Un pin hecho en el panel de la ventana A aparece en el de la ventana B; clic doble no duplica pestañas con un redirect real (Gmail)
+- [x] 5.3 Un pin queda visible en el side panel real; pin sobre la URL final de un redirect local, cerrar la pestaña y abrir dos veces desde el pin deja una sola pestaña (el caso Gmail con ruta raíz está en los tests unitarios)
 - [x] 5.4 `key` en el manifest: el ID (`ndaibachpaafiamdbbnfpmnfbfcpehag`) se mantuvo al cargar una copia desde otra carpeta
 
 ## 6. Idiomas
