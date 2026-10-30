@@ -2,7 +2,7 @@
 (async () => {
   const { normalizeSettings } = await import(chrome.runtime.getURL('src/settings.js'));
 
-  const EDGE_PX = 4;
+  const EDGE_PX = 5;
   const WIDTH_PX = 340;
   const REVEAL_DELAY_MS = 120;
   const HIDE_DELAY_MS = 350;
@@ -11,7 +11,7 @@
   const STYLE = `
     :host { all: initial; }
     .strip, .panel { position: fixed; top: 0; height: 100vh; z-index: 2147483647; }
-    .strip { width: ${EDGE_PX}px; }
+    .strip { width: ${EDGE_PX}px; background: rgb(168 122 53 / 40%); }
     .panel { width: ${WIDTH_PX}px; max-width: 90vw; visibility: hidden; transform: translateX(var(--off));
       transition: transform 120ms ease-out, visibility 120ms; background: Canvas; box-shadow: 0 0 12px rgb(0 0 0 / 35%); }
     .panel.open { visibility: visible; transform: none; }
