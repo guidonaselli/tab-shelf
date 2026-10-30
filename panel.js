@@ -351,3 +351,9 @@ subscribe();
 initSettings().catch(showError);
 render();
 $('search').focus();
+if (isOverlay) {
+  const report = () => parent.postMessage($('search').value || document.activeElement?.tagName === 'SELECT' ? 'zts:busy' : 'zts:idle', '*');
+  document.addEventListener('input', report);
+  document.addEventListener('focusin', report);
+  document.addEventListener('focusout', () => setTimeout(report));
+}

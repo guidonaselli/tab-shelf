@@ -1,7 +1,5 @@
 // Content script: panel pegado al borde de la página que aparece al pasar el mouse por el costado.
 (async () => {
-  const { normalizeSettings } = await import(chrome.runtime.getURL('src/settings.js'));
-
   const ZONE_PX = 32;
   const WIDTH_PX = 340;
   const REVEAL_DELAY_MS = 200;
@@ -22,10 +20,14 @@
     @media (prefers-reduced-motion: reduce) { .panel { transition: none; } }
   `;
 
+  // Un content script no puede importar módulos (YouTube bloquea el import por origen): misma regla que src/settings.js
+  const normalizeSettings = (raw) => ({ side: raw?.side === 'right' ? 'right' : 'left', mode: raw?.mode === 'off' ? 'off' : 'hover' });
+
   let settings = normalizeSettings((await chrome.storage.local.get('settings')).settings);
   let ui = null;
   let revealTimer = 0;
   let hideTimer = 0;
+  let busy = false;
 
   function mount() {
     // un script anterior (extensión recargada) deja su panel huérfano en la página
@@ -41,9 +43,9 @@
     document.documentElement.append(host);
 
     panel.addEventListener('mouseenter', () => clearTimeout(hideTimer));
-    // con el foco dentro del panel (escribiendo, select abierto) no se oculta al salir el mouse
+    // con una búsqueda escrita o un select abierto no se oculta al salir el mouse
     panel.addEventListener('mouseleave', () => {
-      if (document.activeElement !== host) hideTimer = setTimeout(hide, HIDE_DELAY_MS);
+      if (!busy) hideTimer = setTimeout(hide, HIDE_DELAY_MS);
     });
     ui = { host, panel, frame: null };
   }
@@ -65,7 +67,6 @@
       ui.frame.src = `${chrome.runtime.getURL('panel.html')}?window=${windowId}`;
       ui.panel.append(ui.frame);
       ui.panel.classList.add('open');
-      ui.frame.focus();
     } catch {
       // la extensión se recargó: este script quedó huérfano
       unmount();
@@ -74,6 +75,7 @@
 
   function hide() {
     if (!ui) return;
+    busy = false;
     const { panel, frame } = ui;
     panel.classList.remove('open');
     setTimeout(() => { if (!panel.classList.contains('open')) frame?.remove(); }, 200);
@@ -104,7 +106,9 @@
     if (ui && !event.composedPath().includes(ui.host)) hide();
   }, true);
   window.addEventListener('message', (event) => {
-    if (event.origin === EXTENSION_ORIGIN && event.source === ui?.frame?.contentWindow && event.data === 'zts:close') hide();
+    if (event.origin !== EXTENSION_ORIGIN || event.source !== ui?.frame?.contentWindow) return;
+    if (event.data === 'zts:close') hide();
+    else if (event.data === 'zts:busy' || event.data === 'zts:idle') busy = event.data === 'zts:busy';
   });
   chrome.storage.onChanged.addListener((changes, area) => {
     if (area !== 'local' || !changes.settings) return;

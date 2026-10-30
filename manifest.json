@@ -48,8 +48,7 @@
   "web_accessible_resources": [
     {
       "resources": [
-        "panel.html",
-        "src/settings.js"
+        "panel.html"
       ],
       "matches": [
         "http://*/*",
