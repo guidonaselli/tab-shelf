@@ -1,9 +1,14 @@
 import { buildView, filterView, addPin, removePin, dropIndex } from './src/model.js';
+import { normalizeSettings } from './src/settings.js';
 
 const RENDER_DELAY_MS = 100;
 const DRAG_TYPE = 'application/x-zts-tab';
 // cambios de pestaña que alteran lo que se dibuja; el resto (audible, groupId…) no justifica un render
 const VISIBLE_TAB_CHANGES = ['title', 'url', 'favIconUrl', 'status', 'discarded'];
+
+// dentro del panel de borde (iframe en una página) la ventana actual es la de esa página
+const overlayWindow = new URLSearchParams(location.search).get('window');
+const isOverlay = overlayWindow !== null;
 
 const t = (key, ...substitutions) => chrome.i18n.getMessage(key, substitutions);
 const $ = (id) => document.getElementById(id);
@@ -51,6 +56,7 @@ function run(action) {
 }
 
 async function currentWindowId() {
+  if (isOverlay) return Number(overlayWindow);
   return (await chrome.windows.getLastFocused({ windowTypes: ['normal'] })).id;
 }
 
@@ -118,10 +124,17 @@ function findTab(tabId) {
   return state.view.windows.flatMap((w) => w.tabs).find((tab) => tab.id === tabId) ?? null;
 }
 
-// focused:true también restaura una ventana minimizada (verificado en Helium)
+function closeOverlay() {
+  if (isOverlay) parent.postMessage('zts:close', '*');
+}
+
+// La pestaña se trae a la ventana actual; focused:true también restaura una ventana minimizada (verificado en Helium)
 async function activate(tab) {
+  const here = await currentWindowId();
+  if (tab.windowId !== here) await chrome.tabs.move(tab.id, { windowId: here, index: -1 });
   await chrome.tabs.update(tab.id, { active: true });
-  await chrome.windows.update(tab.windowId, { focused: true });
+  await chrome.windows.update(here, { focused: true });
+  closeOverlay();
 }
 
 const focusTab = run(activate);
@@ -135,6 +148,7 @@ const openOrFocus = run(async (pin) => {
     } catch {}
   }
   await chrome.tabs.create({ url: pin.url, windowId: await currentWindowId() });
+  closeOverlay();
 });
 
 const togglePin = run((tab) =>
@@ -298,8 +312,25 @@ function subscribe() {
     if (VISIBLE_TAB_CHANGES.some((key) => key in change)) scheduleRender();
   });
   chrome.storage.onChanged.addListener((changes, area) => {
-    if (area === 'local' && changes.pins) scheduleRender();
+    if (area !== 'local') return;
+    if (changes.pins) scheduleRender();
+    if (changes.settings) showSettings(changes.settings.newValue);
   });
+}
+
+function showSettings(raw) {
+  const { side, mode } = normalizeSettings(raw);
+  $('setting-side').value = side;
+  $('setting-mode').value = mode;
+}
+
+async function initSettings() {
+  showSettings((await chrome.storage.local.get('settings')).settings);
+  const save = run(() => chrome.storage.local.set({
+    settings: normalizeSettings({ side: $('setting-side').value, mode: $('setting-mode').value }),
+  }));
+  $('setting-side').addEventListener('change', save);
+  $('setting-mode').addEventListener('change', save);
 }
 
 applyStaticText();
@@ -307,6 +338,10 @@ $('search').addEventListener('input', (event) => {
   state.query = event.target.value;
   if (state.view) draw();
 });
+document.addEventListener('keydown', (event) => {
+  if (event.key === 'Escape') closeOverlay();
+});
 subscribe();
+initSettings().catch(showError);
 render();
 $('search').focus();

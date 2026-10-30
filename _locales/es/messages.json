@@ -18,5 +18,12 @@
   "errorGeneric": {
     "message": "Algo salió mal: $DETAIL$",
     "placeholders": { "detail": { "content": "$1", "example": "No se pueden editar las pestañas ahora." } }
-  }
+  },
+  "settingsHeading": { "message": "Ajustes" },
+  "settingsSide": { "message": "Lado del panel" },
+  "sideLeft": { "message": "Izquierda" },
+  "sideRight": { "message": "Derecha" },
+  "settingsMode": { "message": "Panel de borde" },
+  "modeHover": { "message": "Mostrar al pasar el mouse por el borde" },
+  "modeOff": { "message": "Desactivado (solo side panel)" }
 }

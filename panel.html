@@ -16,6 +16,21 @@
     </section>
     <div id="windows"></div>
     <p id="no-results" class="hint" data-i18n="noResults" hidden></p>
+    <details id="settings">
+      <summary data-i18n="settingsHeading"></summary>
+      <label><span data-i18n="settingsSide"></span>
+        <select id="setting-side">
+          <option value="left" data-i18n="sideLeft"></option>
+          <option value="right" data-i18n="sideRight"></option>
+        </select>
+      </label>
+      <label><span data-i18n="settingsMode"></span>
+        <select id="setting-mode">
+          <option value="hover" data-i18n="modeHover"></option>
+          <option value="off" data-i18n="modeOff"></option>
+        </select>
+      </label>
+    </details>
     <script type="module" src="panel.js"></script>
   </body>
 </html>

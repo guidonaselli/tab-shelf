@@ -18,5 +18,12 @@
   "errorGeneric": {
     "message": "Something went wrong: $DETAIL$",
     "placeholders": { "detail": { "content": "$1", "example": "Tabs cannot be edited right now." } }
-  }
+  },
+  "settingsHeading": { "message": "Settings" },
+  "settingsSide": { "message": "Panel side" },
+  "sideLeft": { "message": "Left" },
+  "sideRight": { "message": "Right" },
+  "settingsMode": { "message": "Edge panel" },
+  "modeHover": { "message": "Show when hovering the edge" },
+  "modeOff": { "message": "Off (side panel only)" }
 }

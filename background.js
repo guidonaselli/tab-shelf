@@ -10,3 +10,8 @@ function configure() {
 configure();
 chrome.runtime.onInstalled.addListener(configure);
 chrome.runtime.onStartup.addListener(configure);
+
+// el panel de borde vive en una página: pregunta a qué ventana pertenece
+chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message === 'zts:window') sendResponse(sender.tab?.windowId);
+});

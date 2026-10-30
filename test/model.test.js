@@ -1,5 +1,6 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
+import { normalizeSettings } from '../src/settings.js';
 import { normalizeUrl, matchPin, buildView, filterView, addPin, removePin, dropIndex } from '../src/model.js';
 
 const tab = (id, windowId, url, extra = {}) => ({ id, windowId, url, title: '', active: false, ...extra });
@@ -173,4 +174,10 @@ test('dropIndex corrige el desplazamiento solo dentro de la misma ventana', () =
   assert.equal(dropIndex({ fromWindowId: 1, fromIndex: 2, toWindowId: 1, insertBefore: 2 }), 2);
   assert.equal(dropIndex({ fromWindowId: 1, fromIndex: 2, toWindowId: 1, insertBefore: 3 }), 2);
   assert.equal(dropIndex({ fromWindowId: 1, fromIndex: 1, toWindowId: 2, insertBefore: 4 }), 4);
+});
+
+test('normalizeSettings completa los valores ausentes o inválidos con los defaults', () => {
+  assert.deepEqual(normalizeSettings(undefined), { side: 'left', mode: 'hover' });
+  assert.deepEqual(normalizeSettings({ side: 'right', mode: 'off' }), { side: 'right', mode: 'off' });
+  assert.deepEqual(normalizeSettings({ side: 'top', mode: 5 }), { side: 'left', mode: 'hover' });
 });
