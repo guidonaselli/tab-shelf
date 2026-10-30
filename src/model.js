@@ -52,6 +52,8 @@ export function buildView(windows, pins, { currentWindowId, emptyTitle }) {
         favIconUrl: t.favIconUrl || '',
         active: Boolean(t.active),
         discarded: Boolean(t.discarded),
+        audible: Boolean(t.audible),
+        muted: Boolean(t.mutedInfo?.muted),
       };
     }),
   );
@@ -97,4 +99,11 @@ export function removePin(pins, id) {
 export function dropIndex({ fromWindowId, fromIndex, toWindowId, insertBefore }) {
   if (fromWindowId === toWindowId && insertBefore > fromIndex) return insertBefore - 1;
   return insertBefore;
+}
+
+// Qué hace el clic en una pestaña: traerla a la ventana actual ('bring') o ir a su ventana ('go'). Shift fuerza ir.
+// Mover la única pestaña de una ventana la cerraría, así que en ese caso también se va.
+export function clickAction({ tabWindowId, windowTabCount, hereWindowId, shift }) {
+  if (tabWindowId === hereWindowId) return 'stay';
+  return shift || windowTabCount === 1 ? 'go' : 'bring';
 }

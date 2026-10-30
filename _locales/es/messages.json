@@ -33,5 +33,21 @@
   "widthXWide": { "message": "Muy ancho" },
   "settingsAccent": { "message": "Color de acento" },
   "accentReset": { "message": "Restablecer" },
-  "settingsOpacity": { "message": "Opacidad" }
+  "settingsOpacity": { "message": "Opacidad" },
+  "commandTogglePanel": { "message": "Mostrar u ocultar el panel de borde" },
+  "closeTab": { "message": "Cerrar pestaña" },
+  "muteTab": { "message": "Silenciar pestaña" },
+  "unmuteTab": { "message": "Activar el sonido de la pestaña" },
+  "settingsZone": { "message": "Zona de activación" },
+  "zoneSmall": { "message": "Chica (4 px)" },
+  "zoneMedium": { "message": "Mediana (16 px)" },
+  "zoneLarge": { "message": "Grande (32 px)" },
+  "settingsSpeed": { "message": "Velocidad de apertura y cierre" },
+  "speedFast": { "message": "Rápida" },
+  "speedNormal": { "message": "Normal" },
+  "speedSlow": { "message": "Lenta" },
+  "settingsSites": { "message": "Sitios sin panel de borde" },
+  "sitesEmpty": { "message": "Ningún sitio desactivado." },
+  "siteDisable": { "message": "Desactivar aquí" },
+  "siteEnable": { "message": "Activar" }
 }

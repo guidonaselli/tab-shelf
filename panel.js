@@ -1,20 +1,22 @@
-import { buildView, filterView, addPin, removePin, dropIndex } from './src/model.js';
-import { normalizeSettings } from './src/settings.js';
+import { buildView, filterView, addPin, removePin, dropIndex, clickAction } from './src/model.js';
+import './src/settings.js';
 import { glyph } from './src/icons.js';
 
 const RENDER_DELAY_MS = 100;
 const DRAG_TYPE = 'application/x-zts-tab';
 // cambios de pestaña que alteran lo que se dibuja; el resto (audible, groupId…) no justifica un render
-const VISIBLE_TAB_CHANGES = ['title', 'url', 'favIconUrl', 'status', 'discarded'];
+const VISIBLE_TAB_CHANGES = ['title', 'url', 'favIconUrl', 'status', 'discarded', 'audible', 'mutedInfo'];
+const { normalizeSettings, isDisabledHost } = globalThis.ztsSettings;
 
 // dentro del panel de borde (iframe en una página) la ventana actual es la de esa página
-const overlayWindow = new URLSearchParams(location.search).get('window');
+const params = new URLSearchParams(location.search);
+const overlayWindow = params.get('window');
 const isOverlay = overlayWindow !== null;
 
 const t = (key, ...substitutions) => chrome.i18n.getMessage(key, substitutions);
 const $ = (id) => document.getElementById(id);
 
-const state = { view: null, query: '', dragging: null, renderPending: false, renderSeq: 0, timer: 0 };
+const state = { view: null, query: '', dragging: null, renderPending: false, renderSeq: 0, timer: 0, pendingFocus: null, settings: normalizeSettings(), host: '' };
 
 function applyStaticText() {
   document.documentElement.lang = chrome.i18n.getUILanguage();
@@ -25,6 +27,7 @@ function applyStaticText() {
   for (const node of document.querySelectorAll('[data-i18n-label]')) {
     node.setAttribute('aria-label', t(node.dataset.i18nLabel));
   }
+  for (const node of document.querySelectorAll('[data-i18n-title]')) node.title = t(node.dataset.i18nTitle);
 }
 
 function el(tag, props = {}, ...children) {
@@ -129,16 +132,21 @@ function closeOverlay() {
   if (isOverlay) parent.postMessage('zts:close', '*');
 }
 
-// La pestaña se trae a la ventana actual; focused:true también restaura una ventana minimizada (verificado en Helium)
-async function activate(tab) {
+// 'bring' trae la pestaña a la ventana actual; 'go' va a la suya. focused:true también restaura una ventana minimizada (verificado en Helium)
+async function activate(tab, shift = false) {
   const here = await currentWindowId();
-  if (tab.windowId !== here) await chrome.tabs.move(tab.id, { windowId: here, index: -1 });
+  const windowTabCount = state.view.windows.find((w) => w.id === tab.windowId)?.tabs.length ?? 0;
+  const action = clickAction({ tabWindowId: tab.windowId, windowTabCount, hereWindowId: here, shift });
+  if (action === 'bring') await chrome.tabs.move(tab.id, { windowId: here, index: -1 });
   await chrome.tabs.update(tab.id, { active: true });
-  await chrome.windows.update(here, { focused: true });
+  await chrome.windows.update(action === 'go' ? tab.windowId : here, { focused: true });
   closeOverlay();
 }
 
 const focusTab = run(activate);
+
+const closeTab = run((tab) => chrome.tabs.remove(tab.id));
+const toggleMute = run((tab) => chrome.tabs.update(tab.id, { muted: !tab.muted }));
 
 const openOrFocus = run(async (pin) => {
   const open = pin.openTabId === null ? null : findTab(pin.openTabId);
@@ -198,13 +206,23 @@ function moveControl(tab, destinations, key) {
   return el('span', { className: 'action move-select', title: t('moveToOtherWindow') }, glyph('move'), select);
 }
 
+// Al cerrar con teclado el foco pasa a la pestaña vecina (draw() lo restaura cuando existe)
+function focusNeighbor(tab) {
+  const tabs = state.view.windows.find((w) => w.id === tab.windowId)?.tabs ?? [];
+  const i = tabs.findIndex((x) => x.id === tab.id);
+  const next = tabs[i + 1] ?? tabs[i - 1];
+  state.pendingFocus = next ? `tab:${next.id}:main` : null;
+}
+
 function tabRow(tab, inCurrentWindow) {
   const key = `tab:${tab.id}`;
   const main = el('button', { type: 'button', className: 'main', title: tab.url },
     favicon(tab.favIconUrl, tab.title), el('span', { className: 'title', textContent: tab.title }));
   main.dataset.focus = `${key}:main`;
   if (tab.active) main.setAttribute('aria-current', 'true');
-  main.addEventListener('click', () => focusTab(tab));
+  main.addEventListener('click', (event) => focusTab(tab, event.shiftKey));
+  main.addEventListener('mousedown', (event) => { if (event.button === 1) event.preventDefault(); });
+  main.addEventListener('auxclick', (event) => { if (event.button === 1) closeTab(tab); });
 
   const pinLabel = tab.pinId ? t('unpinTab') : t('pinTab');
   const pin = el('button', { type: 'button', className: tab.pinId ? 'action on' : 'action', title: pinLabel }, glyph('pin'));
@@ -212,16 +230,38 @@ function tabRow(tab, inCurrentWindow) {
   pin.setAttribute('aria-label', `${pinLabel}: ${tab.title}`);
   pin.addEventListener('click', () => togglePin(tab));
 
-  const row = el('li', { className: 'row', draggable: true }, main, pin);
+  const closeLabel = `${t('closeTab')}: ${tab.title}`;
+  const close = el('button', { type: 'button', className: 'action', title: t('closeTab') }, glyph('x'));
+  close.dataset.focus = `${key}:close`;
+  close.setAttribute('aria-label', closeLabel);
+  close.addEventListener('click', () => { focusNeighbor(tab); closeTab(tab); });
+
+  const row = el('li', { className: 'row', draggable: true }, main);
+  if (tab.audible || tab.muted) {
+    const muteLabel = tab.muted ? t('unmuteTab') : t('muteTab');
+    const mute = el('button', { type: 'button', className: tab.muted ? 'action live quiet' : 'action live', title: muteLabel }, glyph(tab.muted ? 'volume-off' : 'volume'));
+    mute.dataset.focus = `${key}:mute`;
+    mute.setAttribute('aria-label', `${muteLabel}: ${tab.title}`);
+    mute.addEventListener('click', () => toggleMute(tab));
+    row.append(mute);
+  }
+  row.append(pin);
   row.classList.toggle('active', tab.active);
   row.classList.toggle('current', tab.active && inCurrentWindow);
   row.classList.toggle('discarded', tab.discarded);
 
   const destinations = state.view.windows.filter((w) => w.id !== tab.windowId);
   if (destinations.length > 0) row.append(moveControl(tab, destinations, key));
+  row.append(close);
 
   main.setAttribute('aria-keyshortcuts', 'Alt+ArrowUp Alt+ArrowDown');
   main.addEventListener('keydown', (event) => {
+    if (event.key === 'Delete' && !event.altKey && !event.ctrlKey && !event.metaKey) {
+      event.preventDefault();
+      focusNeighbor(tab);
+      closeTab(tab);
+      return;
+    }
     const step = { ArrowUp: -1, ArrowDown: 1 }[event.key];
     if (!event.altKey || step === undefined) return;
     event.preventDefault();
@@ -286,7 +326,7 @@ function pinRow(pin) {
     favicon(pin.favIconUrl, pin.title), el('span', { className: 'title', textContent: pin.title }));
   main.dataset.focus = `pin:${pin.id}:main`;
   main.addEventListener('click', () => openOrFocus(pin));
-  const remove = el('button', { type: 'button', className: 'action', title: t('unpinTab') }, glyph('x'));
+  const remove = el('button', { type: 'button', className: 'action on', title: t('unpinTab') }, glyph('pin'));
   remove.dataset.focus = `pin:${pin.id}:remove`;
   remove.setAttribute('aria-label', `${t('unpinTab')}: ${pin.title}`);
   remove.addEventListener('click', () => unpin(pin.id));
@@ -295,7 +335,8 @@ function pinRow(pin) {
 
 function draw() {
   // un render no debe sacarle el foco a quien navega con teclado
-  const focused = document.activeElement?.dataset?.focus;
+  const focused = state.pendingFocus ?? document.activeElement?.dataset?.focus;
+  state.pendingFocus = null;
   const filtered = filterView(state.view, state.query);
   $('pins').replaceChildren(...filtered.pins.map(pinRow));
   $('pins-empty').hidden = state.view.pins.length > 0;
@@ -322,59 +363,147 @@ function subscribe() {
   });
 }
 
-function showSettings(raw) {
-  const { side, mode, width, accent, opacity } = normalizeSettings(raw);
-  $('setting-side').value = side;
-  $('setting-mode').value = mode;
-  $('setting-width').value = String(width);
-  $('setting-opacity').value = String(opacity);
-  $('setting-accent').value = accent || '#0b57d0';
-  applyAccent(accent);
-}
-
 function applyAccent(accent) {
   if (accent) document.documentElement.style.setProperty('--accent', accent);
   else document.documentElement.style.removeProperty('--accent');
 }
 
-async function initSettings() {
-  const stored = (await chrome.storage.local.get('settings')).settings;
-  showSettings(stored);
-  let accentChosen = Boolean(normalizeSettings(stored).accent);
-  const save = run(() => chrome.storage.local.set({
-    settings: normalizeSettings({
-      side: $('setting-side').value, mode: $('setting-mode').value,
-      width: Number($('setting-width').value), opacity: Number($('setting-opacity').value), accent: accentChosen ? $('setting-accent').value : '',
-    }),
+// El sitio de la pestaña desde la que se abrió el panel: en el panel de borde lo pasa la página; en el side panel, la pestaña activa.
+async function currentHost() {
+  if (isOverlay) return params.get('host') ?? '';
+  const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+  const url = normalizeHostUrl(tab?.url);
+  return url ?? '';
+}
+
+function normalizeHostUrl(raw) {
+  try {
+    const u = new URL(raw);
+    return u.protocol === 'http:' || u.protocol === 'https:' ? u.hostname : null;
+  } catch {
+    return null;
+  }
+}
+
+function showSettings(raw) {
+  const settings = normalizeSettings(raw);
+  state.settings = settings;
+  $('setting-side').value = settings.side;
+  $('setting-mode').value = settings.mode;
+  $('setting-width').value = String(settings.width);
+  $('setting-opacity').value = String(settings.opacity);
+  $('setting-accent').value = settings.accent || '#0b57d0';
+  $('setting-zone').value = String(settings.zone);
+  $('setting-speed').value = settings.speed;
+  applyAccent(settings.accent);
+  drawSites();
+}
+
+function drawSites() {
+  const { disabledHosts } = state.settings;
+  const disabledHere = state.host !== '' && isDisabledHost(state.host, disabledHosts);
+  $('site-current').hidden = state.host === '';
+  $('site-host').textContent = state.host;
+  $('site-toggle').textContent = t(disabledHere ? 'siteEnable' : 'siteDisable');
+  $('site-empty').hidden = disabledHosts.length > 0;
+  $('site-list').replaceChildren(...disabledHosts.map((host) => {
+    const remove = el('button', { type: 'button', className: 'action live', title: t('siteEnable') }, glyph('x'));
+    remove.setAttribute('aria-label', `${t('siteEnable')}: ${host}`);
+    remove.addEventListener('click', () => saveSettings({ disabledHosts: disabledHosts.filter((h) => h !== host) }));
+    return el('li', { className: 'row site-row' }, el('span', { className: 'title', textContent: host }), remove);
   }));
-  $('setting-side').addEventListener('change', save);
-  $('setting-mode').addEventListener('change', save);
-  $('setting-width').addEventListener('change', save);
-  $('setting-opacity').addEventListener('change', save);
-  $('setting-accent').addEventListener('input', () => { accentChosen = true; applyAccent($('setting-accent').value); });
-  $('setting-accent').addEventListener('change', save);
-  $('accent-reset').addEventListener('click', () => { accentChosen = false; applyAccent(''); save(); });
+}
+
+const saveSettings = run((patch) => chrome.storage.local.set({ settings: normalizeSettings({ ...state.settings, ...patch }) }));
+
+async function initSettings() {
+  state.host = await currentHost();
+  showSettings((await chrome.storage.local.get('settings')).settings);
+  const fromSelect = (id, key, parse = (v) => v) => $(id).addEventListener('change', () => saveSettings({ [key]: parse($(id).value) }));
+  fromSelect('setting-side', 'side');
+  fromSelect('setting-mode', 'mode');
+  fromSelect('setting-width', 'width', Number);
+  fromSelect('setting-opacity', 'opacity', Number);
+  fromSelect('setting-zone', 'zone', Number);
+  fromSelect('setting-speed', 'speed');
+  $('setting-accent').addEventListener('input', () => applyAccent($('setting-accent').value));
+  fromSelect('setting-accent', 'accent');
+  $('accent-reset').addEventListener('click', () => saveSettings({ accent: '' }));
+  $('site-toggle').addEventListener('click', () => {
+    const { disabledHosts } = state.settings;
+    const covering = disabledHosts.filter((h) => state.host === h || state.host.endsWith(`.${h}`));
+    saveSettings({ disabledHosts: covering.length > 0 ? disabledHosts.filter((h) => !covering.includes(h)) : [...disabledHosts, state.host] });
+  });
+}
+
+function setSettingsOpen(open) {
+  $('settings').hidden = !open;
+  $('list-view').hidden = open;
+  $('settings-toggle').setAttribute('aria-expanded', String(open));
+  reportBusy();
+}
+
+const settingsOpen = () => !$('settings').hidden;
+
+// el panel de borde se queda abierto mientras se configura, se busca o hay un selector abierto
+function reportBusy() {
+  if (!isOverlay) return;
+  const active = document.activeElement?.tagName;
+  const busy = $('search').value !== '' || settingsOpen() || active === 'SELECT';
+  parent.postMessage(busy ? 'zts:busy' : 'zts:idle', '*');
+}
+
+// Navegación con flechas entre la búsqueda y las filas; Enter en la búsqueda abre el primer resultado
+function rows() {
+  return [...document.querySelectorAll('#pins .main, #windows .main')];
+}
+
+function firstResult() {
+  const { pins, windows } = filterView(state.view, state.query);
+  return pins[0] ? { pin: pins[0] } : windows[0]?.tabs[0] ? { tab: windows[0].tabs[0] } : null;
 }
 
 applyStaticText();
 document.querySelector('.search').prepend(glyph('search'));
-document.querySelector('#settings summary').prepend(glyph('chevron'));
+$('settings-toggle').append(glyph('sliders'));
+$('settings-toggle').addEventListener('click', () => setSettingsOpen(!settingsOpen()));
 $('search').addEventListener('input', (event) => {
   state.query = event.target.value;
+  if (settingsOpen()) setSettingsOpen(false);
   if (state.view) draw();
 });
+$('search').addEventListener('keydown', (event) => {
+  if (event.key === 'ArrowDown') {
+    event.preventDefault();
+    rows()[0]?.focus();
+  } else if (event.key === 'Enter' && state.query.trim() !== '' && state.view) {
+    const result = firstResult();
+    if (result?.pin) openOrFocus(result.pin);
+    else if (result?.tab) focusTab(result.tab, event.shiftKey);
+  }
+});
 document.addEventListener('keydown', (event) => {
-  if (event.key === 'Escape') closeOverlay();
+  if (event.key === 'Escape') {
+    if (settingsOpen()) setSettingsOpen(false);
+    else closeOverlay();
+    return;
+  }
+  const step = { ArrowUp: -1, ArrowDown: 1 }[event.key];
+  if (step === undefined || event.altKey || event.ctrlKey || event.metaKey || !event.target.matches?.('.main')) return;
+  event.preventDefault();
+  const list = rows();
+  const next = list[list.indexOf(event.target) + step];
+  if (next) next.focus();
+  else if (step < 0) $('search').focus();
 });
 subscribe();
 initSettings().catch(showError);
 render();
-$('search').focus();
+if (!isOverlay || params.has('focus')) $('search').focus();
 if (isOverlay) {
-  const report = () => parent.postMessage($('search').value || document.activeElement?.tagName === 'SELECT' ? 'zts:busy' : 'zts:idle', '*');
   document.addEventListener('dragstart', () => parent.postMessage('zts:busy', '*'));
-  document.addEventListener('dragend', report);
-  document.addEventListener('input', report);
-  document.addEventListener('focusin', report);
-  document.addEventListener('focusout', () => setTimeout(report));
+  document.addEventListener('dragend', reportBusy);
+  document.addEventListener('input', reportBusy);
+  document.addEventListener('focusin', reportBusy);
+  document.addEventListener('focusout', () => setTimeout(reportBusy));
 }

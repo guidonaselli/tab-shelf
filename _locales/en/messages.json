@@ -33,5 +33,21 @@
   "widthXWide": { "message": "Extra wide" },
   "settingsAccent": { "message": "Accent color" },
   "accentReset": { "message": "Reset" },
-  "settingsOpacity": { "message": "Opacity" }
+  "settingsOpacity": { "message": "Opacity" },
+  "commandTogglePanel": { "message": "Show or hide the edge panel" },
+  "closeTab": { "message": "Close tab" },
+  "muteTab": { "message": "Mute tab" },
+  "unmuteTab": { "message": "Unmute tab" },
+  "settingsZone": { "message": "Trigger zone" },
+  "zoneSmall": { "message": "Small (4 px)" },
+  "zoneMedium": { "message": "Medium (16 px)" },
+  "zoneLarge": { "message": "Large (32 px)" },
+  "settingsSpeed": { "message": "Open and close speed" },
+  "speedFast": { "message": "Fast" },
+  "speedNormal": { "message": "Normal" },
+  "speedSlow": { "message": "Slow" },
+  "settingsSites": { "message": "Sites without the edge panel" },
+  "sitesEmpty": { "message": "No sites disabled." },
+  "siteDisable": { "message": "Disable here" },
+  "siteEnable": { "message": "Enable" }
 }

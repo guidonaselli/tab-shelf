@@ -1,7 +1,9 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
-import { normalizeSettings } from '../src/settings.js';
-import { normalizeUrl, matchPin, buildView, filterView, addPin, removePin, dropIndex } from '../src/model.js';
+import '../src/settings.js';
+import { normalizeUrl, matchPin, buildView, filterView, addPin, removePin, dropIndex, clickAction } from '../src/model.js';
+
+const { normalizeSettings, isDisabledHost } = globalThis.ztsSettings;
 
 const tab = (id, windowId, url, extra = {}) => ({ id, windowId, url, title: '', active: false, ...extra });
 const win = (id, left, tabs, extra = {}) => ({ id, left, type: 'normal', incognito: false, state: 'normal', tabs, ...extra });
@@ -177,7 +179,43 @@ test('dropIndex corrige el desplazamiento solo dentro de la misma ventana', () =
 });
 
 test('normalizeSettings completa los valores ausentes o inválidos con los defaults', () => {
-  assert.deepEqual(normalizeSettings(undefined), { side: 'left', mode: 'hover', width: 340, accent: '', opacity: 100 });
-  assert.deepEqual(normalizeSettings({ side: 'right', mode: 'off', width: 440, accent: '#A1b2C3', opacity: 70 }), { side: 'right', mode: 'off', width: 440, accent: '#A1b2C3', opacity: 70 });
-  assert.deepEqual(normalizeSettings({ side: 'top', mode: 5, width: 9999, accent: 'red', opacity: 10 }), { side: 'left', mode: 'hover', width: 340, accent: '', opacity: 100 });
+  const defaults = { side: 'left', mode: 'hover', width: 340, opacity: 100, accent: '', zone: 32, speed: 'normal', disabledHosts: [] };
+  assert.deepEqual(normalizeSettings(undefined), defaults);
+  assert.deepEqual(
+    normalizeSettings({ side: 'right', mode: 'off', width: 440, accent: '#A1b2C3', opacity: 70, zone: 4, speed: 'slow', disabledHosts: ['a.com'] }),
+    { side: 'right', mode: 'off', width: 440, accent: '#A1b2C3', opacity: 70, zone: 4, speed: 'slow', disabledHosts: ['a.com'] },
+  );
+  assert.deepEqual(
+    normalizeSettings({ side: 'top', mode: 5, width: 9999, accent: 'red', opacity: 10, zone: 7, speed: 'toString', disabledHosts: 'a.com' }),
+    defaults,
+  );
+});
+
+test('normalizeSettings limpia disabledHosts: minúsculas, sin duplicados ni valores que no son un host', () => {
+  const hosts = normalizeSettings({ disabledHosts: [' Mail.Google.com ', 'mail.google.com', 'x y', '', 5, 'a/b', '-bad', 'ok-1.io'] }).disabledHosts;
+  assert.deepEqual(hosts, ['mail.google.com', 'ok-1.io']);
+  assert.equal(normalizeSettings({ disabledHosts: Array.from({ length: 300 }, (_, i) => `h${i}.com`) }).disabledHosts.length, 200);
+});
+
+test('isDisabledHost cubre el host y sus subdominios, no hosts que solo terminan igual', () => {
+  const hosts = ['google.com'];
+  assert.equal(isDisabledHost('google.com', hosts), true);
+  assert.equal(isDisabledHost('mail.google.com', hosts), true);
+  assert.equal(isDisabledHost('notgoogle.com', hosts), false);
+  assert.equal(isDisabledHost('google.com.evil.io', hosts), false);
+  assert.equal(isDisabledHost('a.com', []), false);
+});
+
+test('buildView expone audible y silenciada', () => {
+  const windows = [win(1, 0, [{ id: 1, index: 0, url: 'https://a.com/', title: 'A', audible: true, mutedInfo: { muted: true } }, { id: 2, index: 1, url: 'https://b.com/', title: 'B' }])];
+  const [a, b] = buildView(windows, [], opts).windows[0].tabs;
+  assert.deepEqual([a.audible, a.muted, b.audible, b.muted], [true, true, false, false]);
+});
+
+test('clickAction: misma ventana se queda; otra ventana trae, salvo con Shift o si era su única pestaña', () => {
+  const base = { tabWindowId: 2, windowTabCount: 3, hereWindowId: 1, shift: false };
+  assert.equal(clickAction({ ...base, tabWindowId: 1 }), 'stay');
+  assert.equal(clickAction(base), 'bring');
+  assert.equal(clickAction({ ...base, shift: true }), 'go');
+  assert.equal(clickAction({ ...base, windowTabCount: 1 }), 'go');
 });

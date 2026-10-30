@@ -9,17 +9,20 @@
   <body>
     <div class="search">
       <input id="search" type="search" data-i18n-placeholder="searchPlaceholder" data-i18n-label="searchPlaceholder">
+      <button type="button" id="settings-toggle" class="tool" data-i18n-title="settingsHeading" data-i18n-label="settingsHeading" aria-expanded="false" aria-controls="settings"></button>
     </div>
     <p id="status" role="status" hidden></p>
-    <section>
-      <h2 data-i18n="pinsHeading"></h2>
-      <ul id="pins" class="list"></ul>
-      <p id="pins-empty" class="hint" data-i18n="pinsEmpty" hidden></p>
-    </section>
-    <div id="windows"></div>
-    <p id="no-results" class="hint" data-i18n="noResults" hidden></p>
-    <details id="settings">
-      <summary><span data-i18n="settingsHeading"></span></summary>
+    <div id="list-view">
+      <section>
+        <h2 data-i18n="pinsHeading"></h2>
+        <ul id="pins" class="list"></ul>
+        <p id="pins-empty" class="hint" data-i18n="pinsEmpty" hidden></p>
+      </section>
+      <div id="windows"></div>
+      <p id="no-results" class="hint" data-i18n="noResults" hidden></p>
+    </div>
+    <section id="settings" hidden>
+      <h2 data-i18n="settingsHeading"></h2>
       <label><span data-i18n="settingsSide"></span>
         <select id="setting-side">
           <option value="left" data-i18n="sideLeft"></option>
@@ -46,7 +49,28 @@
       <label><span data-i18n="settingsAccent"></span>
         <span class="accent-pick"><input type="color" id="setting-accent"><button type="button" id="accent-reset" data-i18n="accentReset"></button></span>
       </label>
-    </details>
+      <label><span data-i18n="settingsZone"></span>
+        <select id="setting-zone">
+          <option value="4" data-i18n="zoneSmall"></option>
+          <option value="16" data-i18n="zoneMedium"></option>
+          <option value="32" data-i18n="zoneLarge"></option>
+        </select>
+      </label>
+      <label><span data-i18n="settingsSpeed"></span>
+        <select id="setting-speed">
+          <option value="fast" data-i18n="speedFast"></option>
+          <option value="normal" data-i18n="speedNormal"></option>
+          <option value="slow" data-i18n="speedSlow"></option>
+        </select>
+      </label>
+      <h2 data-i18n="settingsSites"></h2>
+      <div id="site-current" class="site-row" hidden>
+        <span id="site-host" class="title"></span>
+        <button type="button" id="site-toggle"></button>
+      </div>
+      <ul id="site-list" class="list"></ul>
+      <p id="site-empty" class="hint" data-i18n="sitesEmpty" hidden></p>
+    </section>
     <script type="module" src="panel.js"></script>
   </body>
 </html>

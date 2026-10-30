@@ -4,7 +4,7 @@
   "version": "0.2.0",
   "description": "__MSG_extDescription__",
   "default_locale": "en",
-  "minimum_chrome_version": "114",
+  "minimum_chrome_version": "123",
   "key": "MIIBIjANBgkqhkiG9w0BAQEFAAOCAQ8AMIIBCgKCAQEA3899rMaxsBQVU7t4ZtLP0wnR9cE60XI5PeuKoZo7ewTCXBWVyXyG4rTpn8jxfyk3hW3U9VlEu2W49a9wHo57RptiXwbS5LonGZ0PGRvf8s5kdQDmV8ExS587Ye9o/glYCLb4CSKDtvlaADffVcfQLgIJKwf73y4Yv2xBLiyg5uqq2KxT8EKwIj92eAJNEE83hXCFJFof0sfnZyDwDYkYmPOikTBZGUbLliBhG5zdEMDpgHCgeyWdDzzaEbjay8xu158o5E/W4Y7SXy1Pcl+ZlFDrs9SOmgO3T31LjTvM7PdbKBrKS2by9IQ4mXaiHhmcIqy2FsXN08pNsnGu8NlkwQIDAQAB",
   "icons": {
     "16": "icons/icon-16.png",
@@ -18,6 +18,13 @@
     "storage",
     "scripting"
   ],
+  "incognito": "not_allowed",
+  "commands": {
+    "toggle-panel": {
+      "suggested_key": { "default": "Alt+Shift+S" },
+      "description": "__MSG_commandTogglePanel__"
+    }
+  },
   "background": {
     "service_worker": "background.js"
   },
@@ -40,6 +47,7 @@
         "https://*/*"
       ],
       "js": [
+        "src/settings.js",
         "overlay.js"
       ],
       "run_at": "document_idle"
@@ -50,6 +58,7 @@
       "resources": [
         "panel.html"
       ],
+      "use_dynamic_url": true,
       "matches": [
         "http://*/*",
         "https://*/*"
