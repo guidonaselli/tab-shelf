@@ -8,6 +8,7 @@
     .panel { position: fixed; top: 8px; z-index: 2147483647; width: var(--w); max-width: calc(90vw - 16px); height: calc(100vh - 16px);
       overflow: hidden; border-radius: 12px; visibility: hidden; transform: translateX(var(--off)); color-scheme: light dark; background: light-dark(#f7f8f9, #1b1c1e);
       box-shadow: 0 0 0 1px rgb(128 128 128 / 30%), 0 8px 24px rgb(0 0 0 / 30%); transition: transform 140ms cubic-bezier(.2, 0, 0, 1), visibility 140ms; }
+    .panel.instant { transition: none; }
     .panel.open { opacity: var(--o); visibility: visible; transform: none; }
     :host([data-side=left]) { --off: calc(-100% - 16px); }
     :host([data-side=right]) { --off: calc(100% + 16px); }
@@ -55,7 +56,7 @@
   }
 
   // focus: solo al abrir con el atajo; el hover no debe quitarle el foco a lo que la persona está escribiendo
-  async function show({ focus = false } = {}) {
+  async function show({ focus = false, instant = false } = {}) {
     if (!ui || ui.panel.classList.contains('open')) return;
     try {
       const windowId = await chrome.runtime.sendMessage('zts:window');
@@ -65,7 +66,10 @@
       ui.frame = document.createElement('iframe');
       ui.frame.src = `${chrome.runtime.getURL('panel.html')}?${params}`;
       ui.panel.append(ui.frame);
+      // tras cerrar la pestaña activa el panel ya estaba abierto: reaparece sin deslizarse
+      ui.panel.classList.toggle('instant', instant);
       ui.panel.classList.add('open');
+      if (instant) requestAnimationFrame(() => requestAnimationFrame(() => ui?.panel.classList.remove('instant')));
       if (focus) ui.frame.focus();
     } catch {
       // la extensión se recargó: este script quedó huérfano
@@ -128,6 +132,10 @@
   }
   // atajo de teclado: responde si el panel de borde está disponible aquí; si no, quien lo pidió usa el side panel
   chrome.runtime.onMessage.addListener((message, _sender, sendResponse) => {
+    if (message === 'zts:reveal') {
+      if (ui && !pageOwnsPointer()) show({ instant: true });
+      return;
+    }
     if (message !== 'zts:toggle') return;
     if (!ui || pageOwnsPointer()) return sendResponse(false);
     if (ui.panel.classList.contains('open')) {

@@ -2,7 +2,7 @@
 globalThis.ztsSettings = (() => {
   const SIDES = ['left', 'right'];
   const MODES = ['hover', 'off'];
-  const WIDTHS = [280, 340, 440, 560];
+  const WIDTHS = [220, 280, 340, 440, 560];
   const ZONES = [4, 16, 32];
   const SPEEDS = { fast: { reveal: 100, hide: 200 }, normal: { reveal: 200, hide: 350 }, slow: { reveal: 400, hide: 600 } };
   const DENSITIES = ['comfortable', 'compact'];

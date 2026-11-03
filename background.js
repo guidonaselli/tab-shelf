@@ -16,6 +16,15 @@ chrome.runtime.onStartup.addListener(configure);
 // el panel de borde vive en una página: pregunta a qué ventana pertenece
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
   if (message === 'zts:window') sendResponse(sender.tab?.windowId);
+  else if (message?.reopen) chrome.storage.session.set({ reopen: { windowId: message.reopen, at: Date.now() } });
+});
+
+// la pestaña que quedó activa tras un cierre desde el panel de borde lo muestra de nuevo
+chrome.tabs.onActivated.addListener(async ({ tabId, windowId }) => {
+  const { reopen } = await chrome.storage.session.get('reopen');
+  if (!reopen || reopen.windowId !== windowId) return;
+  await chrome.storage.session.remove('reopen');
+  if (Date.now() - reopen.at < 3000) chrome.tabs.sendMessage(tabId, 'zts:reveal').catch(() => {});
 });
 
 // Al instalar o recargar la extensión las pestañas abiertas conservan un script huérfano: se reemplaza sin recargarlas

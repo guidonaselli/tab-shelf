@@ -147,7 +147,11 @@ async function activate(tab, shift = false) {
 const focusTab = run(activate);
 
 const closeDuplicates = run(() => chrome.tabs.remove(state.dupIds));
-const closeTab = run((tab) => chrome.tabs.remove(tab.id));
+// cerrar la pestaña activa mueve a otra: el panel de borde (por página) se reabre allí
+const closeTab = run(async (tab) => {
+  if (isOverlay && tab.active && tab.windowId === Number(overlayWindow)) await chrome.runtime.sendMessage({ reopen: tab.windowId });
+  await chrome.tabs.remove(tab.id);
+});
 const toggleMute = run((tab) => chrome.tabs.update(tab.id, { muted: !tab.muted }));
 
 const openOrFocus = run(async (pin) => {
@@ -214,10 +218,19 @@ function focusNeighbor(tab) {
   state.pendingFocus = next ? `tab:${next.id}:main` : null;
 }
 
+// el dominio distingue pestañas homónimas; se recorta antes que el título
+function hostLabel(tab) {
+  let host = '';
+  try {
+    host = new URL(tab.url).hostname.replace(/^www\./, '');
+  } catch {}
+  return el('span', { className: 'host', textContent: tab.title.includes(host) ? '' : host });
+}
+
 function tabRow(tab, inCurrentWindow) {
   const key = `tab:${tab.id}`;
   const main = el('button', { type: 'button', className: 'main', title: tab.url },
-    favicon(tab.favIconUrl, tab.title), el('span', { className: 'title', textContent: tab.title }));
+    favicon(tab.favIconUrl, tab.title), el('span', { className: 'title', textContent: tab.title }), hostLabel(tab));
   main.dataset.focus = `${key}:main`;
   if (tab.active) main.setAttribute('aria-current', 'true');
   main.addEventListener('click', (event) => focusTab(tab, event.shiftKey));
@@ -245,7 +258,7 @@ function tabRow(tab, inCurrentWindow) {
     mute.addEventListener('click', () => toggleMute(tab));
     row.append(mute);
   }
-  row.append(pin);
+  if (tab.pinId) row.append(pin);
   row.classList.toggle('active', tab.active);
   row.classList.toggle('current', tab.active && inCurrentWindow);
   row.classList.toggle('discarded', tab.discarded);
@@ -256,8 +269,11 @@ function tabRow(tab, inCurrentWindow) {
 
   const destinations = state.view.windows.filter((w) => w.id !== tab.windowId);
   const move = moveControl(tab, destinations, key);
-  if (move) row.append(move);
-  row.append(close);
+  const actions = el('span', { className: 'actions' });
+  if (!tab.pinId) actions.append(pin);
+  if (move) actions.append(move);
+  actions.append(close);
+  row.append(actions);
 
   main.setAttribute('aria-keyshortcuts', 'Alt+ArrowUp Alt+ArrowDown');
   main.addEventListener('keydown', (event) => {
@@ -438,6 +454,7 @@ function showSettings(raw) {
   $('setting-mode').value = settings.mode;
   $('setting-width').value = String(settings.width);
   $('setting-opacity').value = String(settings.opacity);
+  $('opacity-value').textContent = `${settings.opacity}%`;
   $('setting-accent').value = settings.accent || '#0b57d0';
   $('setting-zone').value = String(settings.zone);
   $('setting-speed').value = settings.speed;
