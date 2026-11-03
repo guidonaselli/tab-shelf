@@ -2,6 +2,14 @@
 
 ## Unreleased
 
+## 0.4.0
+
+- Tab titles keep their full width: the pin, move and close buttons now float over the row end on hover or focus.
+- Each tab shows its site next to the title, so tabs with the same name can be told apart; duplicates get a dotted underline instead of being dimmed.
+- The current tab has an accent bar; new extra narrow panel width (220 px).
+- Settings are grouped into Behavior and Appearance, with aligned controls and the opacity value shown.
+- Closing the active tab from the edge panel reopens the panel instantly on the tab Chrome moves you to.
+
 ## 0.3.1
 
 - Fixed a light flash when the panel opens in dark mode.
