@@ -5,10 +5,10 @@
     <meta name="viewport" content="width=device-width, initial-scale=1">
     <meta name="color-scheme" content="light dark">
     <title data-i18n="extName"></title>
-    <style>html { background: light-dark(#f7f8f9, #1b1c1e); color-scheme: light dark; }</style>
     <link rel="stylesheet" href="panel.css">
   </head>
   <body>
+    <div class="address"><span id="current-url"></span><button type="button" id="copy-url" class="tool" data-i18n-title="copyUrl" data-i18n-label="copyUrl"></button></div>
     <div class="search">
       <input id="search" type="search" data-i18n-placeholder="searchPlaceholder" data-i18n-label="searchPlaceholder">
       <button type="button" id="settings-toggle" class="tool" data-i18n-title="settingsHeading" data-i18n-label="settingsHeading" aria-expanded="false" aria-controls="settings"></button>
@@ -68,7 +68,7 @@
           <option value="compact" data-i18n="densityCompact"></option>
         </select>
       </label>
-      <label><span><span data-i18n="settingsOpacity"></span> <output id="opacity-value"></output></span>
+      <label for="setting-opacity"><span><span data-i18n="settingsOpacity"></span> <output id="opacity-value"></output></span>
         <input type="range" id="setting-opacity" min="50" max="100" step="5">
       </label>
       <label><span data-i18n="settingsAccent"></span>

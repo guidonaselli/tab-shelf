@@ -1,13 +1,37 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import '../src/settings.js';
-import { normalizeUrl, matchPin, buildView, filterView, addPin, removePin, dropIndex, clickAction, duplicateTabIds, movePin, parseBackup } from '../src/model.js';
+import { normalizeUrl, matchPin, buildView, filterView, addPin, removePin, dropIndex, clickAction, duplicateTabIds, movePin, parseBackup, contrastForeground, surfaceTint } from '../src/model.js';
 
 const { normalizeSettings, isDisabledHost } = globalThis.ztsSettings;
 
 const tab = (id, windowId, url, extra = {}) => ({ id, windowId, url, title: '', active: false, ...extra });
 const win = (id, left, tabs, extra = {}) => ({ id, left, type: 'normal', incognito: false, state: 'normal', tabs, ...extra });
 const opts = { currentWindowId: 1, emptyTitle: 'New tab' };
+
+test('contrastForeground elige blanco sobre un fondo negro', () => {
+  assert.equal(contrastForeground('#000000'), '#ffffff');
+});
+
+test('contrastForeground elige negro sobre un fondo blanco', () => {
+  assert.equal(contrastForeground('#ffffff'), '#000000');
+});
+
+test('contrastForeground elige negro para el contraste WCAG de un gris medio', () => {
+  assert.equal(contrastForeground('#777777'), '#000000');
+});
+
+test('surfaceTint oscurece una superficie blanca', () => {
+  assert.equal(surfaceTint('#ffffff'), '#000000');
+});
+
+test('surfaceTint aclara una superficie negra', () => {
+  assert.equal(surfaceTint('#000000'), '#ffffff');
+});
+
+test('surfaceTint aclara un gris medio para conservar contraste con el texto negro', () => {
+  assert.equal(surfaceTint('#777777'), '#ffffff');
+});
 
 test('normalizeUrl ignora hash, barra final y mayúsculas del host y conserva la query', () => {
   assert.deepEqual(normalizeUrl('HTTPS://Example.com/a/b/?q=1#top'), { host: 'example.com', path: '/a/b', search: '?q=1' });
@@ -63,6 +87,90 @@ test('matchPin: prefiere la ventana actual y luego la pestaña activa', () => {
 test('matchPin: con el mismo rango gana la primera pestaña', () => {
   const tabs = [tab(1, 2, 'https://example.com/a'), tab(2, 2, 'https://example.com/b')];
   assert.equal(matchPin({ url: 'https://example.com/' }, tabs, 1).id, 1);
+});
+
+for (const active of [false, true]) {
+  test(`matchPin: la query exacta gana aunque la otra pestaña esté primero y active sea ${active}`, () => {
+    const tabs = [
+      tab(1, 1, 'https://example.com/watch?v=other', { active }),
+      tab(2, 1, 'https://example.com/watch?v=saved'),
+    ];
+    assert.equal(matchPin({ url: 'https://example.com/watch?v=saved' }, tabs, 1)?.id, 2);
+  });
+}
+
+test('matchPin: sin query exacta conserva el fallback a una subruta redirigida', () => {
+  const tabs = [
+    tab(1, 1, 'https://example.com/docs/login?return=home'),
+    tab(2, 1, 'https://example.com/docs/app?session=live', { active: true }),
+  ];
+  assert.equal(matchPin({ url: 'http://example.com/docs?account=saved' }, tabs, 1)?.id, 2);
+});
+
+test('buildView no asigna a otro pin una pestaña con query exacta reservada', () => {
+  const pins = [
+    { id: 'first', url: 'https://example.com/watch?v=first' },
+    { id: 'second', url: 'https://example.com/watch?v=second' },
+  ];
+  const windows = [win(1, 0, [tab(20, 1, 'https://example.com/watch?v=second')])];
+  assert.deepEqual(buildView(windows, pins, opts).pins.map((pin) => [pin.id, pin.openTabId]), [
+    ['first', null], ['second', 20],
+  ]);
+});
+
+test('buildView conserva el fallback de redirect si la pestaña no pertenece a otro pin', () => {
+  const pins = [
+    { id: 'docs', url: 'https://example.com/docs?account=saved' },
+    { id: 'other', url: 'https://other.com/' },
+  ];
+  const windows = [win(1, 0, [tab(20, 1, 'https://example.com/docs/app?session=live')])];
+  assert.deepEqual(buildView(windows, pins, opts).pins.map((pin) => [pin.id, pin.openTabId]), [
+    ['docs', 20], ['other', null],
+  ]);
+});
+
+test('buildView conserva pinId y openTabId aunque la pestaña asociada haya navegado', () => {
+  const pins = [{ id: 'saved', url: 'https://example.com/original' }];
+  const windows = [win(1, 0, [tab(20, 1, 'https://other.com/new')])];
+  const view = buildView(windows, pins, { ...opts, pinTabs: { saved: 20 } });
+  assert.deepEqual([view.pins[0].openTabId, view.windows[0].tabs[0].pinId], [20, 'saved']);
+});
+
+test('buildView no sustituye una asociación null por otra pestaña con la misma URL', () => {
+  const pins = [{ id: 'saved', url: 'https://example.com/original' }];
+  const windows = [win(1, 0, [tab(20, 1, 'https://example.com/original')])];
+  const view = buildView(windows, pins, { ...opts, pinTabs: { saved: null } });
+  assert.deepEqual([view.pins[0].openTabId, view.windows[0].tabs[0].pinId], [null, null]);
+});
+
+test('buildView no adjudica un fallback ambiguo a varios pins', () => {
+  const pins = [
+    { id: 'first', url: 'https://example.com/docs?account=first' },
+    { id: 'second', url: 'https://example.com/docs?account=second' },
+  ];
+  const windows = [win(1, 0, [tab(20, 1, 'https://example.com/docs/login')])];
+  assert.deepEqual(buildView(windows, pins, { ...opts, pinTabs: {} }).pins.map((pin) => pin.openTabId), [null, null]);
+});
+
+test('buildView con sesión vacía reserva la coincidencia exacta antes del fallback de otro pin', () => {
+  const pins = [
+    { id: 'first', url: 'https://example.com/watch?v=first' },
+    { id: 'second', url: 'https://example.com/watch?v=second' },
+  ];
+  const windows = [win(1, 0, [tab(20, 1, 'https://example.com/watch?v=second')])];
+  const view = buildView(windows, pins, { ...opts, pinTabs: {} });
+  assert.deepEqual(view.pins.map((pin) => [pin.id, pin.openTabId]), [['first', null], ['second', 20]]);
+  assert.equal(view.windows[0].tabs[0].pinId, 'second');
+});
+
+test('duplicateTabIds nunca propone cerrar las pestañas asociadas a pins', () => {
+  const view = { windows: [{ tabs: [
+    { id: 1, url: 'https://example.com/', active: false, pinId: 'first' },
+    { id: 2, url: 'https://example.com/', active: false, pinId: 'second' },
+    { id: 3, url: 'https://example.com/', active: true, pinId: null },
+    { id: 4, url: 'https://example.com/', active: false, pinId: null },
+  ] }] };
+  assert.deepEqual(duplicateTabIds(view), [4]);
 });
 
 test('buildView ordena ventanas por left y excluye popups e incognito', () => {

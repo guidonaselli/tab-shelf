@@ -1,9 +1,10 @@
-import { buildView, filterView, addPin, removePin, dropIndex, clickAction, duplicateTabIds, movePin, parseBackup } from './src/model.js';
+import { contrastForeground, surfaceTint, buildView, filterView, dropIndex, clickAction, duplicateTabIds, parseBackup } from './src/model.js';
 import './src/settings.js';
 import { glyph } from './src/icons.js';
 
 const RENDER_DELAY_MS = 100;
 const DRAG_TYPE = 'application/x-zts-tab';
+const graphemes = new Intl.Segmenter(undefined, { granularity: 'grapheme' });
 // cambios de pestaña que alteran lo que se dibuja; el resto (audible, groupId…) no justifica un render
 const VISIBLE_TAB_CHANGES = ['title', 'url', 'favIconUrl', 'status', 'discarded', 'audible', 'mutedInfo'];
 const { normalizeSettings, isDisabledHost } = globalThis.ztsSettings;
@@ -18,6 +19,7 @@ const $ = (id) => document.getElementById(id);
 
 const state = { view: null, query: '', dragging: null, renderPending: false, renderSeq: 0, timer: 0, pendingFocus: null, settings: normalizeSettings(), host: '', pinDrag: null, collapsed: new Set(), dupIds: [] };
 const isDragging = () => state.dragging !== null || state.pinDrag !== null;
+let queryEdited = false;
 
 function applyStaticText() {
   document.documentElement.lang = chrome.i18n.getUILanguage();
@@ -69,22 +71,24 @@ async function readPins() {
   return (await chrome.storage.local.get('pins')).pins ?? [];
 }
 
-// El lock es del origen de la extensión: serializa las escrituras de todos los paneles abiertos.
-function mutatePins(update) {
-  return navigator.locks.request('zts-pins', async () => {
-    const pins = await readPins();
-    const next = update(pins);
-    if (next !== pins) await chrome.storage.local.set({ pins: next });
-  });
+async function mutatePins(command) {
+  const result = await chrome.runtime.sendMessage({ pins: command });
+  if (!result?.ok) throw new Error(result?.error || t('pinSaveFailed'));
+  return result;
 }
 
 async function loadView() {
-  const [windows, pins, current] = await Promise.all([
+  const [windows, pins, current, { pinTabs = {} }] = await Promise.all([
     chrome.windows.getAll({ populate: true, windowTypes: ['normal'] }),
     readPins(),
     currentWindowId(),
+    chrome.storage.session.get('pinTabs'),
   ]);
-  return buildView(windows, pins, { currentWindowId: current, emptyTitle: t('emptyTabTitle') });
+  const view = buildView(windows, pins, { currentWindowId: current, emptyTitle: t('emptyTabTitle'), pinTabs });
+  const matches = view.pins.filter((pin) => !Object.hasOwn(pinTabs, pin.id) && pin.openTabId !== null)
+    .map((pin) => ({ id: pin.id, tabId: pin.openTabId }));
+  if (matches.length) await mutatePins({ op: 'reconcile', matches });
+  return view;
 }
 
 async function render() {
@@ -97,6 +101,10 @@ async function render() {
       return;
     }
     state.view = view;
+    const active = view.windows.find((win) => win.isCurrent)?.tabs.find((tab) => tab.active);
+    $('current-url').textContent = active?.url || active?.title || '';
+    $('current-url').title = active?.url || '';
+    $('copy-url').disabled = !active?.url;
     draw();
   } catch (error) {
     showError(error);
@@ -118,15 +126,11 @@ function scheduleRender() {
 }
 
 function favicon(favIconUrl, title) {
-  const letter = () => el('span', { className: 'icon letter', textContent: (Array.from(title.trim())[0] ?? '?').toUpperCase() });
+  const letter = () => el('span', { className: 'icon letter', textContent: (graphemes.segment(title.trim())[Symbol.iterator]().next().value?.segment ?? '?').toUpperCase() });
   if (!favIconUrl) return letter();
   const img = el('img', { className: 'icon', alt: '', src: favIconUrl, referrerPolicy: 'no-referrer' });
   img.addEventListener('error', () => img.replaceWith(letter()), { once: true });
   return img;
-}
-
-function findTab(tabId) {
-  return state.view.windows.flatMap((w) => w.tabs).find((tab) => tab.id === tabId) ?? null;
 }
 
 function closeOverlay() {
@@ -141,35 +145,21 @@ async function activate(tab, shift = false) {
   if (action === 'bring') await chrome.tabs.move(tab.id, { windowId: here, index: -1 });
   await chrome.tabs.update(tab.id, { active: true });
   await chrome.windows.update(action === 'go' ? tab.windowId : here, { focused: true });
-  closeOverlay();
 }
 
 const focusTab = run(activate);
 
 const closeDuplicates = run(() => chrome.tabs.remove(state.dupIds));
-// cerrar la pestaña activa mueve a otra: el panel de borde (por página) se reabre allí
-const closeTab = run(async (tab) => {
-  if (isOverlay && tab.active && tab.windowId === Number(overlayWindow)) await chrome.runtime.sendMessage({ reopen: tab.windowId });
-  await chrome.tabs.remove(tab.id);
-});
+const closeTab = run((tab) => chrome.tabs.remove(tab.id));
 const toggleMute = run((tab) => chrome.tabs.update(tab.id, { muted: !tab.muted }));
 
 const openOrFocus = run(async (pin) => {
-  const open = pin.openTabId === null ? null : findTab(pin.openTabId);
-  if (open) {
-    // la pestaña pudo cerrarse dentro del lote de render: se abre una nueva en vez de fallar
-    try {
-      return await activate(open);
-    } catch {}
-  }
-  await chrome.tabs.create({ url: pin.url, windowId: await currentWindowId() });
-  closeOverlay();
+  await mutatePins({ op: 'open', id: pin.id, windowId: await currentWindowId(), candidateId: pin.openTabId });
 });
 
-const togglePin = run((tab) =>
-  mutatePins((pins) => (tab.pinId ? removePin(pins, tab.pinId) : addPin(pins, tab, crypto.randomUUID()))));
-
-const unpin = run((pinId) => mutatePins((pins) => removePin(pins, pinId)));
+const togglePin = run((tab) => mutatePins(tab.pinId ? { op: 'remove', id: tab.pinId } : { op: 'add', tab }));
+const unpin = run((id) => mutatePins({ op: 'remove', id }));
+const movePinned = run((id, beforeId) => mutatePins({ op: 'move', id, beforeId }));
 
 const moveToNewWindow = run((tabId) => chrome.windows.create({ tabId }));
 
@@ -354,15 +344,31 @@ function windowSection(win, position) {
 }
 
 function pinRow(pin) {
-  const main = el('button', { type: 'button', className: 'main', title: pin.url },
+  const main = el('button', { type: 'button', className: 'main', title: `${pin.title}\n${pin.url}\n${t('pinReorderKeys')}` },
     favicon(pin.favIconUrl, pin.title), el('span', { className: 'title', textContent: pin.title }));
   main.dataset.focus = `pin:${pin.id}:main`;
+  main.setAttribute('aria-keyshortcuts', 'Alt+ArrowLeft Alt+ArrowRight');
+  main.setAttribute('aria-description', t('pinReorderKeys'));
   main.addEventListener('click', () => openOrFocus(pin));
+  const reorder = run(async (step) => {
+    const { position } = await mutatePins({ op: 'step', id: pin.id, step });
+    if (position) {
+      $('status').className = '';
+      $('status').textContent = t('pinMoved', pin.title, String(position));
+      $('status').hidden = false;
+    }
+  });
+  main.addEventListener('keydown', (event) => {
+    const step = { ArrowLeft: -1, ArrowRight: 1 }[event.key];
+    if (!event.altKey || event.ctrlKey || event.metaKey || event.shiftKey || step === undefined) return;
+    event.preventDefault();
+    reorder(step);
+  });
   const remove = el('button', { type: 'button', className: 'action on', title: t('unpinTab') }, glyph('pin'));
   remove.dataset.focus = `pin:${pin.id}:remove`;
   remove.setAttribute('aria-label', `${t('unpinTab')}: ${pin.title}`);
   remove.addEventListener('click', () => unpin(pin.id));
-  const row = el('li', { className: pin.openTabId === null ? 'row' : 'row active', draggable: true }, main, remove);
+  const row = el('li', { className: pin.openTabId === null ? 'row pin-tile' : 'row pin-tile active', draggable: true }, main, remove);
   row.title = t('reorderPin');
   let after = false;
   row.addEventListener('dragstart', (event) => {
@@ -376,7 +382,7 @@ function pinRow(pin) {
     if (!state.pinDrag) return;
     event.preventDefault();
     const rect = row.getBoundingClientRect();
-    after = event.clientY > rect.top + rect.height / 2;
+    after = event.clientX > rect.left + rect.width / 2;
     clearDropMarks();
     row.classList.add(after ? 'drop-after' : 'drop-before');
   });
@@ -387,7 +393,7 @@ function pinRow(pin) {
     const pins = state.view.pins;
     const beforeId = after ? (pins[pins.findIndex((p) => p.id === pin.id) + 1]?.id ?? null) : pin.id;
     endDrag();
-    mutatePins((list) => movePin(list, id, beforeId));
+    movePinned(id, beforeId);
   });
   return row;
 }
@@ -395,7 +401,7 @@ function pinRow(pin) {
 function draw() {
   state.dupIds = duplicateTabIds(state.view);
   $('dup-bar').hidden = state.dupIds.length === 0;
-  $('dup-close').textContent = t('closeDuplicates', String(state.dupIds.length));
+  $('dup-close').textContent = state.dupIds.length === 1 ? t('closeDuplicate') : t('closeDuplicates', String(state.dupIds.length));
   // un render no debe sacarle el foco a quien navega con teclado
   const focused = state.pendingFocus ?? document.activeElement?.dataset?.focus;
   state.pendingFocus = null;
@@ -419,6 +425,7 @@ function subscribe() {
     if (VISIBLE_TAB_CHANGES.some((key) => key in change)) scheduleRender();
   });
   chrome.storage.onChanged.addListener((changes, area) => {
+    if (area === 'session' && changes.pinTabs) scheduleRender();
     if (area !== 'local') return;
     if (changes.pins) scheduleRender();
     if (changes.settings) showSettings(changes.settings.newValue);
@@ -426,8 +433,20 @@ function subscribe() {
 }
 
 function applyAccent(accent) {
-  if (accent) document.documentElement.style.setProperty('--accent', accent);
-  else document.documentElement.style.removeProperty('--accent');
+  const style = document.documentElement.style;
+  for (const key of ['--surface', '--fg', '--muted', '--accent', '--hover', '--pressed', '--selected', '--danger', '--error-bg']) style.removeProperty(key);
+  if (!accent) return;
+  const foreground = contrastForeground(accent);
+  style.setProperty('--surface', accent);
+  style.setProperty('--fg', foreground);
+  style.setProperty('--muted', foreground);
+  style.setProperty('--accent', foreground);
+  style.setProperty('--danger', foreground);
+  style.setProperty('--error-bg', 'var(--hover)');
+  const tint = surfaceTint(accent);
+  style.setProperty('--hover', `color-mix(in srgb, ${accent} 92%, ${tint})`);
+  style.setProperty('--pressed', `color-mix(in srgb, ${accent} 86%, ${tint})`);
+  style.setProperty('--selected', `color-mix(in srgb, ${accent} 84%, ${tint})`);
 }
 
 // El sitio de la pestaña desde la que se abrió el panel: en el panel de borde lo pasa la página; en el side panel, la pestaña activa.
@@ -489,15 +508,9 @@ const exportBackup = run(async () => {
 });
 
 const importBackup = run(async (file) => {
-  const backup = parseBackup(await file.text(), normalizeSettings);
-  if (!backup) throw new Error(t('backupInvalid'));
-  let added = 0;
-  await mutatePins((pins) => {
-    const next = backup.pins.reduce((acc, pin) => addPin(acc, pin, crypto.randomUUID()), pins);
-    added = next.length - pins.length;
-    return next;
-  });
-  await saveSettings(backup.settings);
+  const text = await file.text();
+  if (!parseBackup(text, normalizeSettings)) throw new Error(t('backupInvalid'));
+  const { added } = await mutatePins({ op: 'import', text });
   const status = $('status');
   status.className = '';
   status.textContent = t('backupImported', String(added));
@@ -546,13 +559,13 @@ const settingsOpen = () => !$('settings').hidden;
 function reportBusy() {
   if (!isOverlay) return;
   const active = document.activeElement?.tagName;
-  const busy = $('search').value !== '' || settingsOpen() || active === 'SELECT';
+  const busy = isDragging() || $('search').value !== '' || settingsOpen() || active === 'SELECT' || (document.hasFocus() && active && active !== 'BODY');
   parent.postMessage(busy ? 'zts:busy' : 'zts:idle', '*');
 }
 
 // Navegación con flechas entre la búsqueda y las filas; Enter en la búsqueda abre el primer resultado
 function rows() {
-  return [...document.querySelectorAll('#pins .main, #windows .main')];
+  return [...document.querySelectorAll('#pins .main, #windows .main')].filter((row) => !row.closest('[hidden]'));
 }
 
 function firstResult() {
@@ -563,9 +576,33 @@ function firstResult() {
 applyStaticText();
 document.querySelector('.search').prepend(glyph('search'));
 $('settings-toggle').append(glyph('sliders'));
+$('copy-url').append(glyph('copy'));
+$('copy-url').addEventListener('click', run(async () => {
+  const [active] = await chrome.tabs.query({ active: true, windowId: await currentWindowId() });
+  const url = active?.url || active?.pendingUrl;
+  if (!url) throw new Error(t('copyFailed'));
+  if (isOverlay) {
+    // La política de la página puede bloquear Clipboard API dentro del iframe.
+    const input = el('textarea', { value: url });
+    input.style.cssText = 'position:fixed;opacity:0';
+    document.body.append(input);
+    input.select();
+    const copied = document.execCommand('copy');
+    input.remove();
+    $('copy-url').focus();
+    if (!copied) throw new Error(t('copyFailed'));
+  } else {
+    await navigator.clipboard.writeText(url);
+  }
+  $('status').className = '';
+  $('status').textContent = t('urlCopied');
+  $('status').hidden = false;
+}));
 $('settings-toggle').addEventListener('click', () => setSettingsOpen(!settingsOpen()));
 $('search').addEventListener('input', (event) => {
+  queryEdited = true;
   state.query = event.target.value;
+  if (isOverlay) chrome.runtime.sendMessage({ overlay: 'query', query: state.query }).catch(showError);
   if (settingsOpen()) setSettingsOpen(false);
   if (state.view) draw();
 });
@@ -581,8 +618,10 @@ $('search').addEventListener('keydown', (event) => {
 });
 document.addEventListener('keydown', (event) => {
   if (event.key === 'Escape') {
-    if (settingsOpen()) setSettingsOpen(false);
-    else closeOverlay();
+    if (settingsOpen()) {
+      setSettingsOpen(false);
+      $('settings-toggle').focus();
+    } else closeOverlay();
     return;
   }
   const step = { ArrowUp: -1, ArrowDown: 1 }[event.key];
@@ -596,11 +635,23 @@ document.addEventListener('keydown', (event) => {
 subscribe();
 initSettings().catch(showError);
 render();
-if (!isOverlay || params.has('focus')) $('search').focus();
 if (isOverlay) {
+  chrome.runtime.sendMessage({ overlay: 'query-read' }).then((query) => {
+    if (queryEdited || typeof query !== 'string') return;
+    $('search').value = state.query = query;
+    if (state.view) draw();
+    reportBusy();
+  }).catch(showError);
   document.addEventListener('dragstart', () => parent.postMessage('zts:busy', '*'));
   document.addEventListener('dragend', reportBusy);
   document.addEventListener('input', reportBusy);
-  document.addEventListener('focusin', reportBusy);
+  document.addEventListener('focusin', () => {
+    reportBusy();
+    if (document.hasFocus()) {
+      parent.postMessage('zts:focused', '*');
+      chrome.runtime.sendMessage({ overlay: 'focus', focused: true }).catch(showError);
+    }
+  });
   document.addEventListener('focusout', () => setTimeout(reportBusy));
 }
+if (!isOverlay || params.has('focus')) $('search').focus();

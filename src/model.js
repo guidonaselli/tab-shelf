@@ -1,3 +1,20 @@
+const rgb = (hex) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
+const luminance = (rgb) => rgb.map((c) => c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4)
+  .reduce((sum, c, i) => sum + c * [0.2126, 0.7152, 0.0722][i], 0);
+
+export function contrastForeground(hex) {
+  return luminance(rgb(hex)) > 0.179 ? '#000000' : '#ffffff';
+}
+
+export function surfaceTint(hex) {
+  const foreground = contrastForeground(hex);
+  const target = foreground === '#000000' ? 0 : 1;
+  const shaded = luminance(rgb(hex).map((c) => c * 0.84 + target * 0.16));
+  const contrast = target === 0 ? (shaded + 0.05) / 0.05 : 1.05 / (shaded + 0.05);
+  // El margen sobre 4.5:1 absorbe el redondeo de colores en pantalla.
+  return contrast >= 4.55 ? foreground : (target === 0 ? '#ffffff' : '#000000');
+}
+
 // Sitio (host:puerto, sin distinguir http de https) + ruta sin barra final + query; ignora el hash. null si no es http(s).
 export function normalizeUrl(raw) {
   let u;
@@ -10,14 +27,6 @@ export function normalizeUrl(raw) {
   return { host: u.host, path: u.pathname.replace(/\/+$/, ''), search: u.search };
 }
 
-// Un pin cubre su sitio y todo lo que cuelga de su ruta; la query no cuenta.
-function matches(pin, tab) {
-  const p = normalizeUrl(pin.url);
-  const t = normalizeUrl(tab.url);
-  if (!p || !t || p.host !== t.host) return false;
-  return t.path === p.path || t.path.startsWith(p.path + '/');
-}
-
 // Misma dirección exacta (sitio, ruta y query): lo que decide si una pestaña "es" un pin.
 function sameTarget(a, b) {
   const x = normalizeUrl(a);
@@ -25,17 +34,24 @@ function sameTarget(a, b) {
   return Boolean(x && y && x.host === y.host && x.path === y.path && x.search === y.search);
 }
 
-// Entre varias pestañas que coinciden gana la de la ventana actual, luego la activa.
 export function matchPin(pin, tabs, currentWindowId) {
-  const rank = (t) => (t.windowId === currentWindowId ? 2 : 0) + (t.active ? 1 : 0);
+  const target = normalizeUrl(pin.url);
+  if (!target) return;
   let best;
-  for (const t of tabs) {
-    if (matches(pin, t) && (!best || rank(t) > rank(best))) best = t;
+  let bestRank = -1;
+  for (const tab of tabs) {
+    const url = normalizeUrl(tab.url);
+    if (!url || url.host !== target.host || (url.path !== target.path && !url.path.startsWith(target.path + '/'))) continue;
+    const rank = (url.path === target.path && url.search === target.search ? 4 : 0) + (tab.windowId === currentWindowId ? 2 : 0) + (tab.active ? 1 : 0);
+    if (rank > bestRank) {
+      best = tab;
+      bestRank = rank;
+    }
   }
   return best;
 }
 
-export function buildView(windows, pins, { currentWindowId, emptyTitle }) {
+export function buildView(windows, pins, { currentWindowId, emptyTitle, pinTabs }) {
   const normal = windows
     .filter((w) => w.type === 'normal' && !w.incognito)
     .sort((a, b) => (a.left ?? 0) - (b.left ?? 0) || a.id - b.id);
@@ -58,6 +74,33 @@ export function buildView(windows, pins, { currentWindowId, emptyTitle }) {
     }),
   );
 
+  const pinByTab = new Map(tabs.map((tab) => [tab.id, pins.find((pin) => sameTarget(pin.url, tab.url))]));
+  const assigned = new Map();
+  if (pinTabs) {
+    pinByTab.clear();
+    for (const pin of pins) {
+      const tab = tabs.find((item) => item.id === pinTabs[pin.id]);
+      if (tab && !pinByTab.has(tab.id)) {
+        pinByTab.set(tab.id, pin);
+        assigned.set(pin.id, tab.id);
+      }
+    }
+    const missing = pins.filter((pin) => !(pin.id in pinTabs));
+    for (const pin of missing) {
+      const exact = matchPin(pin, tabs.filter((tab) => !pinByTab.has(tab.id) && sameTarget(pin.url, tab.url)), currentWindowId);
+      if (exact) {
+        pinByTab.set(exact.id, pin);
+        assigned.set(pin.id, exact.id);
+      }
+    }
+    const candidates = missing.filter((pin) => !assigned.has(pin.id)).map((pin) => [pin, matchPin(pin, tabs.filter((tab) => !pinByTab.has(tab.id)), currentWindowId)]);
+    for (const [pin, tab] of candidates) {
+      if (tab && candidates.filter(([, candidate]) => candidate?.id === tab.id).length === 1) {
+        pinByTab.set(tab.id, pin);
+        assigned.set(pin.id, tab.id);
+      }
+    }
+  }
   return {
     windows: normal.map((w) => ({
       id: w.id,
@@ -65,9 +108,12 @@ export function buildView(windows, pins, { currentWindowId, emptyTitle }) {
       minimized: w.state === 'minimized',
       tabs: tabs
         .filter((t) => t.windowId === w.id)
-        .map((t) => ({ ...t, pinId: pins.find((p) => sameTarget(p.url, t.url))?.id ?? null })),
+        .map((t) => ({ ...t, pinId: pinByTab.get(t.id)?.id ?? null })),
     })),
-    pins: pins.map((p) => ({ ...p, openTabId: matchPin(p, tabs, currentWindowId)?.id ?? null })),
+    pins: pins.map((p) => ({
+      ...p,
+      openTabId: pinTabs ? (assigned.get(p.id) ?? null) : (matchPin(p, tabs.filter((tab) => !pinByTab.get(tab.id) || pinByTab.get(tab.id) === p), currentWindowId)?.id ?? null),
+    })),
   };
 }
 
@@ -122,7 +168,7 @@ export function duplicateTabIds(view) {
   const extra = [];
   for (const tabs of groups.values()) {
     const keep = tabs.find((t) => t.active) ?? tabs[0];
-    for (const tab of tabs) if (tab !== keep) extra.push(tab.id);
+    for (const tab of tabs) if (tab !== keep && !tab.pinId) extra.push(tab.id);
   }
   return extra;
 }

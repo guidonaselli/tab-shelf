@@ -3,13 +3,14 @@
   --surface: light-dark(#f7f8f9, #1b1c1e);
   --fg: CanvasText;
   --muted: color-mix(in srgb, CanvasText 64%, var(--surface));
-  --hairline: color-mix(in srgb, CanvasText 14%, var(--surface));
-  --hover: color-mix(in srgb, CanvasText 8%, var(--surface));
-  --pressed: color-mix(in srgb, CanvasText 14%, var(--surface));
+  --hairline: color-mix(in srgb, var(--fg) 14%, var(--surface));
+  --hover: color-mix(in srgb, var(--fg) 8%, var(--surface));
+  --pressed: color-mix(in srgb, var(--fg) 14%, var(--surface));
   --accent-default: light-dark(#0b57d0, #8ab4f8);
   --accent: var(--accent-default);
   --selected: color-mix(in srgb, var(--accent) 16%, var(--surface));
   --danger: light-dark(#b3261e, #f2b8b5);
+  --error-bg: color-mix(in srgb, var(--danger) 14%, var(--surface));
   --radius: 8px;
   --row: 32px;
   --ease: 120ms ease-out;
@@ -24,13 +25,26 @@ h2 { display: flex; align-items: center; gap: 8px; margin: 16px 8px 4px; font-si
 h2 .tag { padding: 0 8px; font-weight: 500; line-height: 18px; border-radius: 9px; background: var(--hover); }
 .glyph { flex: none; width: 16px; height: 16px; fill: none; stroke: currentColor; stroke-width: 1.75; stroke-linecap: round; stroke-linejoin: round; }
 
+.address { display: flex; align-items: center; gap: 4px; min-width: 0; margin-bottom: 6px; padding-left: 10px; border-radius: var(--radius); background: var(--hover); }
+.address span { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; color: var(--muted); }
+.address .tool:disabled { opacity: .4; cursor: default; }
+#pins { display: grid; grid-template-columns: repeat(auto-fill, minmax(56px, 1fr)); gap: 4px; }
+#pins .pin-tile { min-width: 0; aspect-ratio: 1; background: var(--hover); }
+#pins .pin-tile .main { justify-content: center; height: 100%; padding: 8px; }
+#pins .pin-tile .icon { width: 24px; height: 24px; }
+#pins .pin-tile .title { position: absolute; width: 1px; height: 1px; overflow: hidden; clip-path: inset(50%); }
+#pins .pin-tile .action { position: absolute; top: 0; right: 0; width: 22px; height: 22px; margin: 0; opacity: 0; }
+#pins .pin-tile:hover .action, #pins .pin-tile:focus-within .action { opacity: 1; }
+#pins .pin-tile.drop-before { box-shadow: -2px 0 0 var(--accent); }
+#pins .pin-tile.drop-after { box-shadow: 2px 0 0 var(--accent); }
+#pins .pin-tile.active::after { content: ''; position: absolute; bottom: 4px; left: 50%; width: 4px; height: 4px; border-radius: 50%; background: var(--accent); transform: translateX(-50%); }
 .search { position: relative; display: flex; align-items: center; gap: 4px; }
 .search input { flex: 1; min-width: 0; }
 .tool { flex: none; display: grid; place-items: center; width: 34px; height: 34px; color: var(--muted); border-radius: 17px; }
 .tool:hover, .tool[aria-expanded=true] { color: var(--fg); background: var(--hover); }
 .search > .glyph-search { position: absolute; top: 9px; left: 12px; color: var(--muted); pointer-events: none; }
 input[type=search] { width: 100%; height: 34px; padding: 0 12px 0 34px; font: inherit; color: inherit; caret-color: var(--accent);
-  background: var(--hover); border: 1px solid transparent; border-radius: 17px; transition: background-color var(--ease), border-color var(--ease); }
+  background: var(--hover); border: 1px solid transparent; border-radius: 17px; transition: border-color var(--ease); }
 input[type=search]::placeholder { color: var(--muted); }
 input[type=search]:focus-visible { outline: none; background: var(--surface); border-color: var(--accent); }
 
@@ -68,7 +82,7 @@ button:focus-visible, select:focus-visible, .move-select:focus-within, summary:f
 .icon { flex: none; width: 16px; height: 16px; border-radius: 4px; }
 .icon.letter { display: inline-grid; place-items: center; font-size: 10px; font-weight: 600; color: var(--muted); background: var(--pressed); }
 .hint { margin: 8px; color: var(--muted); }
-.error { margin: 8px 0; padding: 8px 12px; color: var(--danger); background: color-mix(in srgb, var(--danger) 14%, var(--surface)); border-radius: var(--radius); }
+.error { margin: 8px 0; padding: 8px 12px; color: var(--danger); background: var(--error-bg); border-radius: var(--radius); }
 
 #settings { padding: 0 8px; }
 #settings h2 { margin-left: 0; margin-right: 0; }
