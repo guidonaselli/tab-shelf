@@ -2,6 +2,10 @@
 
 ## Unreleased
 
+- Tabs from all windows now appear in one flat list with a global order for the session. Dragging or `Alt+↑` / `Alt+↓` reorders across windows; the order is rebuilt after a browser restart or extension reload.
+- Clicking a row from another window moves the real tab to the current window and activates it; `Shift`+click focuses its source window, including for pins. If it was the last tab, an auxiliary tab with the panel keeps that window open. Explicit controls move tabs between windows.
+- Pins and settings are retained across browser restarts and extension reloads.
+
 ## 0.4.0
 
 - Tab titles keep their full width: the pin, move and close buttons now float over the row end on hover or focus.

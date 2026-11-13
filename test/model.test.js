@@ -1,7 +1,7 @@
 import { test } from 'node:test';
 import assert from 'node:assert/strict';
 import '../src/settings.js';
-import { normalizeUrl, matchPin, buildView, filterView, addPin, removePin, dropIndex, clickAction, duplicateTabIds, movePin, parseBackup, contrastForeground, surfaceTint } from '../src/model.js';
+import { normalizeUrl, matchPin, buildView, filterView, addPin, removePin, duplicateTabIds, movePin, parseBackup, contrastForeground, surfaceTint } from '../src/model.js';
 
 const { normalizeSettings, isDisabledHost } = globalThis.ztsSettings;
 
@@ -278,14 +278,6 @@ test('removePin quita solo el id indicado', () => {
   assert.deepEqual(removePin([{ id: 'a' }, { id: 'b' }], 'a'), [{ id: 'b' }]);
 });
 
-test('dropIndex corrige el desplazamiento solo dentro de la misma ventana', () => {
-  assert.equal(dropIndex({ fromWindowId: 1, fromIndex: 1, toWindowId: 1, insertBefore: 4 }), 3);
-  assert.equal(dropIndex({ fromWindowId: 1, fromIndex: 3, toWindowId: 1, insertBefore: 1 }), 1);
-  assert.equal(dropIndex({ fromWindowId: 1, fromIndex: 2, toWindowId: 1, insertBefore: 2 }), 2);
-  assert.equal(dropIndex({ fromWindowId: 1, fromIndex: 2, toWindowId: 1, insertBefore: 3 }), 2);
-  assert.equal(dropIndex({ fromWindowId: 1, fromIndex: 1, toWindowId: 2, insertBefore: 4 }), 4);
-});
-
 test('normalizeSettings completa los valores ausentes o inválidos con los defaults', () => {
   const defaults = { side: 'left', mode: 'hover', width: 340, opacity: 100, accent: '', zone: 32, speed: 'normal', density: 'comfortable', disabledHosts: [] };
   assert.deepEqual(normalizeSettings(undefined), defaults);
@@ -318,14 +310,6 @@ test('buildView expone audible y silenciada', () => {
   const windows = [win(1, 0, [{ id: 1, index: 0, url: 'https://a.com/', title: 'A', audible: true, mutedInfo: { muted: true } }, { id: 2, index: 1, url: 'https://b.com/', title: 'B' }])];
   const [a, b] = buildView(windows, [], opts).windows[0].tabs;
   assert.deepEqual([a.audible, a.muted, b.audible, b.muted], [true, true, false, false]);
-});
-
-test('clickAction: misma ventana se queda; otra ventana trae, salvo con Shift o si era su única pestaña', () => {
-  const base = { tabWindowId: 2, windowTabCount: 3, hereWindowId: 1, shift: false };
-  assert.equal(clickAction({ ...base, tabWindowId: 1 }), 'stay');
-  assert.equal(clickAction(base), 'bring');
-  assert.equal(clickAction({ ...base, shift: true }), 'go');
-  assert.equal(clickAction({ ...base, windowTabCount: 1 }), 'go');
 });
 
 test('duplicateTabIds conserva la activa (o la primera) de cada grupo y ignora lo que no es http(s)', () => {

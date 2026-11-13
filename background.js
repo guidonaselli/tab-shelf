@@ -1,5 +1,6 @@
-import { addPin, removePin, movePin, parseBackup, clickAction, matchPin } from './src/model.js';
+import { addPin, removePin, movePin, parseBackup, matchPin } from './src/model.js';
 import './src/settings.js';
+import { reconcileOrder, moveInOrder } from './src/shared-order.js';
 
 const OVERLAY_FILES = ['src/settings.js', 'overlay.js'];
 
@@ -21,6 +22,57 @@ function queuePinWork(action) {
   const next = pinQueue.then(action);
   pinQueue = next.catch(() => {});
   return next;
+}
+
+async function moveSafely(tab, windowId) {
+  if (tab.windowId === windowId) return;
+  const sourceTabs = await chrome.tabs.query({ windowId: tab.windowId });
+  if (sourceTabs.length === 1) {
+    const placeholder = await chrome.tabs.create({ windowId: tab.windowId, url: 'panel.html', active: false });
+    const { placeholders = [] } = await chrome.storage.session.get('placeholders');
+    await chrome.storage.session.set({ placeholders: [...placeholders, placeholder.id] });
+  }
+  await chrome.tabs.move(tab.id, { windowId, index: -1 });
+  if (tab.active && sourceTabs.length > 1) {
+    const recent = sourceTabs.filter((item) => item.id !== tab.id).sort((a, b) => (b.lastAccessed ?? 0) - (a.lastAccessed ?? 0))[0];
+    await chrome.tabs.update(recent.id, { active: true });
+  }
+}
+
+async function activateTab(tab, windowId, shift = false) {
+  if (!shift) await moveSafely(tab, windowId);
+  await chrome.tabs.update(tab.id, { active: true });
+  await chrome.windows.update(shift ? tab.windowId : windowId, { focused: true });
+}
+
+function updateTabs(command) {
+  return queuePinWork(async () => {
+    if (command.op === 'order' || command.op === 'reorder') {
+      const { tabOrder = [] } = await chrome.storage.session.get('tabOrder');
+      let next;
+      if (command.op === 'order') {
+        if (!Array.isArray(command.ids) || !command.ids.every(Number.isInteger)) throw new Error('Invalid tab order');
+        next = reconcileOrder(tabOrder, [...tabOrder, ...command.ids].map((id) => ({ id })));
+      } else {
+        if (!Number.isInteger(command.tabId) || (command.beforeId !== null && !Number.isInteger(command.beforeId))) throw new Error('Invalid tab order');
+        next = moveInOrder(tabOrder, command.tabId, command.beforeId);
+      }
+      if (next.length !== tabOrder.length || next.some((id, i) => id !== tabOrder[i])) await chrome.storage.session.set({ tabOrder: next });
+      return { ok: true, order: next };
+    }
+    if (!Number.isInteger(command.tabId)) throw new Error('Invalid tab');
+    const tab = await chrome.tabs.get(command.tabId);
+    if (command.op === 'newWindow') {
+      if ((await chrome.tabs.query({ windowId: tab.windowId })).length < 2) throw new Error('Cannot move the only tab to a new window');
+      await chrome.windows.create({ tabId: tab.id });
+      return { ok: true };
+    }
+    if (!Number.isInteger(command.windowId)) throw new Error('Invalid window');
+    if (command.op === 'activate') await activateTab(tab, command.windowId, command.shift === true);
+    else if (command.op === 'move') await moveSafely(tab, command.windowId);
+    else throw new Error('Invalid tab operation');
+    return { ok: true };
+  });
 }
 
 function updatePins(command) {
@@ -92,11 +144,7 @@ function updatePins(command) {
           pinTabs[pin.id] = tab.id;
           sessionChanged = true;
         } else {
-          const tabs = await chrome.tabs.query({ windowId: tab.windowId });
-          const action = clickAction({ tabWindowId: tab.windowId, windowTabCount: tabs.length, hereWindowId: command.windowId, shift: false });
-          if (action === 'bring') await chrome.tabs.move(tab.id, { windowId: command.windowId, index: -1 });
-          await chrome.tabs.update(tab.id, { active: true });
-          await chrome.windows.update(action === 'go' ? tab.windowId : command.windowId, { focused: true });
+          await activateTab(tab, command.windowId, command.shift === true);
         }
         result.tabId = tab.id;
         break;
@@ -121,7 +169,7 @@ function updatePins(command) {
 
 function updatePinTab(removedId, replacementId) {
   return queuePinWork(async () => {
-    const { pinTabs = {} } = await chrome.storage.session.get('pinTabs');
+    const { pinTabs = {}, tabOrder = [], placeholders = [] } = await chrome.storage.session.get(['pinTabs', 'tabOrder', 'placeholders']);
     let changed = false;
     for (const id of Object.keys(pinTabs)) {
       if (pinTabs[id] === removedId) {
@@ -129,10 +177,15 @@ function updatePinTab(removedId, replacementId) {
         changed = true;
       }
     }
-    if (changed) await chrome.storage.session.set({ pinTabs });
+    const update = {};
+    if (changed) update.pinTabs = pinTabs;
+    if (tabOrder.includes(removedId)) update.tabOrder = [...new Set(tabOrder.map((id) => id === removedId ? replacementId : id).filter(Number.isInteger))];
+    if (placeholders.includes(removedId)) update.placeholders = placeholders.filter((id) => id !== removedId);
+    if (Object.keys(update).length) await chrome.storage.session.set(update);
   });
 }
 
+chrome.tabs.onAttached.addListener((tabId) => chrome.tabs.sendMessage(tabId, 'zts:relocated').catch(() => {}));
 chrome.tabs.onRemoved.addListener((tabId) => updatePinTab(tabId, null));
 chrome.tabs.onReplaced.addListener((addedId, removedId) => updatePinTab(removedId, addedId));
 
@@ -149,6 +202,10 @@ function updateOverlays(action) {
 }
 
 chrome.runtime.onMessage.addListener((message, sender, sendResponse) => {
+  if (message?.tabs) {
+    updateTabs(message.tabs).then(sendResponse, (error) => sendResponse({ ok: false, error: error.message }));
+    return true;
+  }
   if (message?.pins) {
     updatePins(message.pins).then(sendResponse, (error) => sendResponse({ ok: false, error: error.message }));
     return true;

@@ -3,30 +3,28 @@
 [Español](README.es.md)
 
 One tab list for every browser window. Tab Shelf is a Manifest V3 extension for Chromium-based browsers
-(built and tested on [Helium](https://github.com/imputnet/helium)) that brings the shared-tabs feel of
-Zen Browser to them: see every tab from every window in one place, jump to any of them, and pull one into
-the window you are working in.
+(built and tested on [Helium](https://github.com/imputnet/helium)) that shows tabs from every window in a
+single, globally ordered list.
 
 ## Features
 
-- **Tabs from all windows** in one panel, ordered by window position, so multi-monitor setups read left to right.
+- **One global tab order** across all windows. Drag tabs or press `Alt+↑` / `Alt+↓` to reorder them across the full list. The order is rebuilt when the browser restarts or the extension reloads.
 - **Edge panel.** Hover the left or right edge of any web page and the panel slides over it. It closes when
   the mouse leaves, on `Esc`, or when you click outside. In the settings (the sliders button next to the search box)
   you pick the side, width, opacity and panel background color, the size of the trigger zone and how fast it opens and closes,
   or turn it off. You can also turn it off for single sites, for example games or web apps that use the page edge.
-- **Click to bring here.** Clicking a tab from another window moves it to the window you are in and activates it.
-  `Shift`+click jumps to that tab's own window instead. If it is the only tab of its window, the click always jumps,
-  so the window is not closed behind your back.
+- **Click to bring here.** Clicking a row from another window moves that real browser tab to the current window and
+  activates it. `Shift`+click focuses its source window, including for pins. If it was the last tab, Tab Shelf creates
+  an auxiliary tab with the panel to keep that window open. Use the explicit move controls to move tabs between windows.
 - **Close and mute.** Close a tab with its `x` button, a middle click or `Delete`. Tabs that play sound show a speaker
   button to mute them.
 - **Keyboard.** `Alt+Shift+S` shows or hides the edge panel and puts you in the search box (it falls back to the
   side panel on pages where the edge panel cannot run). Change it at `chrome://extensions/shortcuts`.
   In the search box, `Enter` opens the first result and `↓` moves into the list; `↑` and `↓` walk the rows.
 - **Shared pins.** A pin remembers its tab during the session, even as you navigate. Closing the tab keeps the pin, which reopens its saved address. After a browser or extension restart, the tab association is restored by URL and may be lost if the tab navigated.
-- **Move and reorder.** Drag tabs between windows, use the move selector on each row, or press `Alt+↑` / `Alt+↓` to reorder.
-- **Window sections.** Each window shows its tab count and can be collapsed. Moving a tab can also send it to a new window.
+- **Move tabs between windows** with the explicit move controls on each row.
 - **Duplicates.** Tabs with the same address are dimmed and one button closes the extras, keeping the active tab and pinned tabs.
-- **Pins you can reorder** by dragging or, while focused, with `Alt+←` / `Alt+→`; a JSON **backup** (export/import of pins and settings) is in the settings. Density can be compact.
+- **Shared pins.** Pins and settings are retained across browser restarts and extension reloads. Pins can be reordered by dragging or, while focused, with `Alt+←` / `Alt+→`; a JSON **backup** (export/import of pins and settings) is in the settings. Density can be compact.
 - **Search**, light and dark themes, English and Spanish UI.
 - Also works as a regular side panel (click the toolbar icon).
 - The active tab's URL appears at the top of the panel and can be copied with its button. Panel continuity follows the active tab on `http(s)` pages.

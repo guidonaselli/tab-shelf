@@ -89,9 +89,11 @@ async function panel(pins = [{ id: 'docs', title: 'Docs', url: 'https://example.
   const event = { addListener() {} };
   const chrome = {
     i18n: { getMessage: (key, substitutions) => key === 'errorGeneric' ? `Error: ${substitutions}` : key, getUILanguage: () => 'en' },
-    runtime: { sendMessage: async (message) => {
+    runtime: { getURL: (path) => `chrome-extension://test/${path}`, sendMessage: async (message) => {
       runtimeMessages.push(structuredClone(message));
-      return message?.pins ? { ok: true, tabId: 20 } : '';
+      if (message === 'zts:window') return 7;
+      if (message?.tabs?.op === 'order') return { ok: true, order: session.tabOrder ?? message.tabs.ids };
+      return message?.pins || message?.tabs ? { ok: true, tabId: 20 } : '';
     } },
     storage: {
       local: { get: async () => ({ pins }) },
@@ -104,8 +106,10 @@ async function panel(pins = [{ id: 'docs', title: 'Docs', url: 'https://example.
     tabs: Object.fromEntries(['onCreated', 'onRemoved', 'onMoved', 'onAttached', 'onDetached', 'onActivated', 'onReplaced', 'onUpdated'].map((name) => [name, event])),
     windows: {
       ...Object.fromEntries(['onCreated', 'onRemoved', 'onFocusChanged', 'onBoundsChanged'].map((name) => [name, event])),
-      getAll: async () => liveTabs.length ? [{ id: 7, left: 0, type: 'normal', state: 'normal', tabs: liveTabs }] : [],
-      getLastFocused: async () => ({ id: 7 }),
+      getAll: async () => [...new Set(liveTabs.map((tab) => tab.windowId))].map((id) => ({
+        id, left: 0, type: 'normal', state: 'normal', tabs: liveTabs.filter((tab) => tab.windowId === id),
+      })),
+      getCurrent: async () => ({ id: 7 }),
     },
   };
   chrome.tabs.onActivated = { addListener(listener) { onActivated = listener; } };
@@ -180,7 +184,38 @@ test('ArrowDown desde búsqueda omite filas con un ancestro oculto', async () =>
   assert.equal(document.activeElement.dataset.focus, 'pin:visible:main');
 });
 
+test('un auxiliar navegado a un panel.html externo aparece y el auxiliar real queda oculto', async () => {
+  const app = await panel([], {
+    tabs: [
+      { id: 10, windowId: 7, index: 0, title: 'Sitio', url: 'https://site.test/panel.html', active: true },
+      { id: 20, windowId: 7, index: 1, title: 'Auxiliar', url: 'chrome-extension://test/panel.html', active: false },
+    ],
+    session: { placeholders: [10, 20] },
+  });
+  const list = app.document.getElementById('windows').children[0];
+  assert.deepEqual(list.children.map((row) => row.children[0].dataset.focus), ['tab:10:main']);
+});
+
 for (const isOverlay of [false, true]) {
+  test(`la lista global respeta el orden compartido entre ventanas en ${isOverlay ? 'iframe' : 'panel'}`, async () => {
+    const app = await panel([], {
+      isOverlay,
+      tabs: [
+        { id: 10, windowId: 7, index: 0, title: 'Local', url: 'https://local.test/', active: true },
+        { id: 20, windowId: 8, index: 0, title: 'Remota', url: 'https://remote.test/', active: true },
+      ],
+      session: { tabOrder: [20, 10] },
+    });
+    const list = app.document.getElementById('windows').children[0];
+    assert.deepEqual(list.children.map((row) => row.children[0].dataset.focus), ['tab:20:main', 'tab:10:main']);
+    assert.deepEqual(app.runtimeMessages.filter((message) => message?.tabs), [{ tabs: { op: 'order', ids: [10, 20] } }]);
+    list.children[0].children[0].dispatchEvent({ type: 'click', shiftKey: true });
+    await setImmediate();
+    assert.deepEqual(app.runtimeMessages.filter((message) => message?.tabs?.op === 'activate'), [
+      { tabs: { op: 'activate', tabId: 20, windowId: 7, shift: true } },
+    ]);
+  });
+
   test(`la vista con sesión vacía solicita reconciliar el candidato en ${isOverlay ? 'iframe' : 'panel'}`, async () => {
     const app = await panel([{ id: 'saved', title: 'Guardado', url: 'https://example.com/docs' }], {
       isOverlay,
@@ -201,7 +236,7 @@ for (const isOverlay of [false, true]) {
     app.pin.children[0].dispatchEvent({ type: 'click' });
     await setImmediate();
     assert.deepEqual(app.runtimeMessages.filter((message) => message?.pins), [
-      { pins: { op: 'open', id: 'saved', windowId: 7, candidateId: 20 } },
+      { pins: { op: 'open', id: 'saved', windowId: 7, candidateId: 20, shift: false } },
     ]);
     assert.equal(app.document.getElementById('status').hidden, true);
   });

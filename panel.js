@@ -1,4 +1,4 @@
-import { contrastForeground, surfaceTint, buildView, filterView, dropIndex, clickAction, duplicateTabIds, parseBackup } from './src/model.js';
+import { contrastForeground, surfaceTint, buildView, filterView, duplicateTabIds, parseBackup } from './src/model.js';
 import './src/settings.js';
 import { glyph } from './src/icons.js';
 
@@ -17,7 +17,7 @@ const isOverlay = overlayWindow !== null;
 const t = (key, ...substitutions) => chrome.i18n.getMessage(key, substitutions);
 const $ = (id) => document.getElementById(id);
 
-const state = { view: null, query: '', dragging: null, renderPending: false, renderSeq: 0, timer: 0, pendingFocus: null, settings: normalizeSettings(), host: '', pinDrag: null, collapsed: new Set(), dupIds: [] };
+const state = { view: null, query: '', dragging: null, renderPending: false, renderSeq: 0, timer: 0, pendingFocus: null, settings: normalizeSettings(), host: '', pinDrag: null, dupIds: [] };
 const isDragging = () => state.dragging !== null || state.pinDrag !== null;
 let queryEdited = false;
 
@@ -63,8 +63,12 @@ function run(action) {
 }
 
 async function currentWindowId() {
-  if (isOverlay) return Number(overlayWindow);
-  return (await chrome.windows.getLastFocused({ windowTypes: ['normal'] })).id;
+  if (isOverlay) {
+    const windowId = await chrome.runtime.sendMessage('zts:window');
+    if (Number.isInteger(windowId)) return windowId;
+    return Number(overlayWindow);
+  }
+  return (await chrome.windows.getCurrent()).id;
 }
 
 async function readPins() {
@@ -78,13 +82,19 @@ async function mutatePins(command) {
 }
 
 async function loadView() {
-  const [windows, pins, current, { pinTabs = {} }] = await Promise.all([
+  const [windows, pins, current, { pinTabs = {}, placeholders = [] }] = await Promise.all([
     chrome.windows.getAll({ populate: true, windowTypes: ['normal'] }),
     readPins(),
     currentWindowId(),
-    chrome.storage.session.get('pinTabs'),
+    chrome.storage.session.get(['pinTabs', 'placeholders']),
   ]);
+  for (const win of windows) win.tabs = (win.tabs ?? []).filter((tab) => !(placeholders.includes(tab.id) && (tab.url || tab.pendingUrl || '') === chrome.runtime.getURL('panel.html')));
   const view = buildView(windows, pins, { currentWindowId: current, emptyTitle: t('emptyTabTitle'), pinTabs });
+  const tabs = view.windows.flatMap((win) => win.tabs);
+  const result = await chrome.runtime.sendMessage({ tabs: { op: 'order', ids: tabs.map((tab) => tab.id) } });
+  if (!result?.ok) throw new Error(result?.error || t('errorGeneric', 'Order unavailable'));
+  const byId = new Map(tabs.map((tab) => [tab.id, tab]));
+  view.tabs = result.order.map((id) => byId.get(id)).filter(Boolean);
   const matches = view.pins.filter((pin) => !Object.hasOwn(pinTabs, pin.id) && pin.openTabId !== null)
     .map((pin) => ({ id: pin.id, tabId: pin.openTabId }));
   if (matches.length) await mutatePins({ op: 'reconcile', matches });
@@ -137,14 +147,9 @@ function closeOverlay() {
   if (isOverlay) parent.postMessage('zts:close', '*');
 }
 
-// 'bring' trae la pestaña a la ventana actual; 'go' va a la suya. focused:true también restaura una ventana minimizada (verificado en Helium)
 async function activate(tab, shift = false) {
-  const here = await currentWindowId();
-  const windowTabCount = state.view.windows.find((w) => w.id === tab.windowId)?.tabs.length ?? 0;
-  const action = clickAction({ tabWindowId: tab.windowId, windowTabCount, hereWindowId: here, shift });
-  if (action === 'bring') await chrome.tabs.move(tab.id, { windowId: here, index: -1 });
-  await chrome.tabs.update(tab.id, { active: true });
-  await chrome.windows.update(action === 'go' ? tab.windowId : here, { focused: true });
+  const result = await chrome.runtime.sendMessage({ tabs: { op: 'activate', tabId: tab.id, windowId: await currentWindowId(), shift } });
+  if (!result?.ok) throw new Error(result?.error || 'Tab activation failed');
 }
 
 const focusTab = run(activate);
@@ -153,18 +158,27 @@ const closeDuplicates = run(() => chrome.tabs.remove(state.dupIds));
 const closeTab = run((tab) => chrome.tabs.remove(tab.id));
 const toggleMute = run((tab) => chrome.tabs.update(tab.id, { muted: !tab.muted }));
 
-const openOrFocus = run(async (pin) => {
-  await mutatePins({ op: 'open', id: pin.id, windowId: await currentWindowId(), candidateId: pin.openTabId });
+const openOrFocus = run(async (pin, shift = false) => {
+  await mutatePins({ op: 'open', id: pin.id, windowId: await currentWindowId(), candidateId: pin.openTabId, shift });
 });
 
 const togglePin = run((tab) => mutatePins(tab.pinId ? { op: 'remove', id: tab.pinId } : { op: 'add', tab }));
 const unpin = run((id) => mutatePins({ op: 'remove', id }));
 const movePinned = run((id, beforeId) => mutatePins({ op: 'move', id, beforeId }));
 
-const moveToNewWindow = run((tabId) => chrome.windows.create({ tabId }));
+const moveToNewWindow = run(async (tabId) => {
+  const result = await chrome.runtime.sendMessage({ tabs: { op: 'newWindow', tabId } });
+  if (!result?.ok) throw new Error(result?.error || 'Window creation failed');
+});
 
-const moveTab = run(async (tabId, windowId, index) => {
-  await chrome.tabs.move(tabId, { windowId, index });
+const moveTab = run(async (tabId, windowId) => {
+  const result = await chrome.runtime.sendMessage({ tabs: { op: 'move', tabId, windowId } });
+  if (!result?.ok) throw new Error(result?.error || 'Tab move failed');
+});
+
+const reorderTab = run(async (tabId, beforeId) => {
+  const result = await chrome.runtime.sendMessage({ tabs: { op: 'reorder', tabId, beforeId } });
+  if (!result?.ok) throw new Error(result?.error || 'Tab reorder failed');
 });
 
 function clearDropMarks() {
@@ -202,7 +216,7 @@ function moveControl(tab, destinations, key) {
 
 // Al cerrar con teclado el foco pasa a la pestaña vecina (draw() lo restaura cuando existe)
 function focusNeighbor(tab) {
-  const tabs = state.view.windows.find((w) => w.id === tab.windowId)?.tabs ?? [];
+  const tabs = filterView(state.view, state.query).tabs;
   const i = tabs.findIndex((x) => x.id === tab.id);
   const next = tabs[i + 1] ?? tabs[i - 1];
   state.pendingFocus = next ? `tab:${next.id}:main` : null;
@@ -222,7 +236,7 @@ function tabRow(tab, inCurrentWindow) {
   const main = el('button', { type: 'button', className: 'main', title: tab.url },
     favicon(tab.favIconUrl, tab.title), el('span', { className: 'title', textContent: tab.title }), hostLabel(tab));
   main.dataset.focus = `${key}:main`;
-  if (tab.active) main.setAttribute('aria-current', 'true');
+  if (tab.active && inCurrentWindow) main.setAttribute('aria-current', 'true');
   main.addEventListener('click', (event) => focusTab(tab, event.shiftKey));
   main.addEventListener('mousedown', (event) => { if (event.button === 1) event.preventDefault(); });
   main.addEventListener('auxclick', (event) => { if (event.button === 1) closeTab(tab); });
@@ -276,9 +290,10 @@ function tabRow(tab, inCurrentWindow) {
     const step = { ArrowUp: -1, ArrowDown: 1 }[event.key];
     if (!event.altKey || step === undefined) return;
     event.preventDefault();
-    const target = tab.index + step;
-    const count = state.view.windows.find((w) => w.id === tab.windowId).tabs.length;
-    if (target >= 0 && target < count) moveTab(tab.id, tab.windowId, target);
+    const tabs = state.view.tabs;
+    const index = tabs.findIndex((item) => item.id === tab.id);
+    const target = index + step;
+    if (target >= 0 && target < tabs.length) reorderTab(tab.id, step < 0 ? tabs[target].id : (tabs[target + 1]?.id ?? null));
   });
 
   let after = false;
@@ -302,46 +317,15 @@ function tabRow(tab, inCurrentWindow) {
     if (!state.dragging) return;
     event.preventDefault();
     event.stopPropagation();
-    const { tabId, windowId, index } = state.dragging;
-    const insertBefore = tab.index + (after ? 1 : 0);
+    const { tabId } = state.dragging;
+    const tabs = state.view.tabs;
+    const beforeId = after ? (tabs[tabs.findIndex((item) => item.id === tab.id) + 1]?.id ?? null) : tab.id;
     endDrag();
-    moveTab(tabId, tab.windowId, dropIndex({ fromWindowId: windowId, fromIndex: index, toWindowId: tab.windowId, insertBefore }));
+    reorderTab(tabId, beforeId);
   });
   return row;
 }
 
-function windowSection(win, position) {
-  // con una búsqueda activa se muestra todo: una ventana contraída ocultaría resultados
-  const collapsed = state.query.trim() === '' && state.collapsed.has(win.id);
-  const toggle = el('button', { type: 'button', className: 'collapse', title: t('collapseWindow') },
-    glyph('chevron'), el('span', { textContent: t('windowHeading', String(position)) }));
-  toggle.setAttribute('aria-expanded', String(!collapsed));
-  toggle.dataset.focus = `win:${win.id}:toggle`;
-  toggle.addEventListener('click', () => {
-    if (!state.collapsed.delete(win.id)) state.collapsed.add(win.id);
-    draw();
-  });
-  const heading = el('h2', {}, toggle, el('span', { className: 'count', textContent: String(win.tabs.length) }));
-  if (win.isCurrent) heading.append(el('span', { className: 'tag', textContent: t('currentWindow') }));
-  if (win.minimized) heading.append(el('span', { className: 'tag', textContent: t('minimizedWindow') }));
-
-  const list = el('ul', { className: 'list' }, ...win.tabs.map((tab) => tabRow(tab, win.isCurrent)));
-  list.hidden = collapsed;
-  const section = el('section', {}, heading, list);
-  section.addEventListener('dragover', (event) => {
-    if (!state.dragging) return;
-    event.preventDefault();
-    clearDropMarks();
-  });
-  section.addEventListener('drop', (event) => {
-    if (!state.dragging) return;
-    event.preventDefault();
-    const { tabId } = state.dragging;
-    endDrag();
-    moveTab(tabId, win.id, -1);
-  });
-  return section;
-}
 
 function pinRow(pin) {
   const main = el('button', { type: 'button', className: 'main', title: `${pin.title}\n${pin.url}\n${t('pinReorderKeys')}` },
@@ -349,7 +333,7 @@ function pinRow(pin) {
   main.dataset.focus = `pin:${pin.id}:main`;
   main.setAttribute('aria-keyshortcuts', 'Alt+ArrowLeft Alt+ArrowRight');
   main.setAttribute('aria-description', t('pinReorderKeys'));
-  main.addEventListener('click', () => openOrFocus(pin));
+  main.addEventListener('click', (event) => openOrFocus(pin, event.shiftKey));
   const reorder = run(async (step) => {
     const { position } = await mutatePins({ op: 'step', id: pin.id, step });
     if (position) {
@@ -408,8 +392,9 @@ function draw() {
   const filtered = filterView(state.view, state.query);
   $('pins').replaceChildren(...filtered.pins.map(pinRow));
   $('pins-empty').hidden = state.view.pins.length > 0;
-  $('windows').replaceChildren(...filtered.windows.map((win) => windowSection(win, state.view.windows.findIndex((w) => w.id === win.id) + 1)));
-  $('no-results').hidden = state.query === '' || filtered.windows.length > 0 || filtered.pins.length > 0;
+  const current = state.view.windows.find((win) => win.isCurrent)?.id;
+  $('windows').replaceChildren(el('ul', { className: 'list' }, ...filtered.tabs.map((tab) => tabRow(tab, tab.windowId === current))));
+  $('no-results').hidden = state.query === '' || filtered.tabs.length > 0 || filtered.pins.length > 0;
   if (focused) document.querySelector(`[data-focus="${CSS.escape(focused)}"]`)?.focus();
 }
 
@@ -425,7 +410,7 @@ function subscribe() {
     if (VISIBLE_TAB_CHANGES.some((key) => key in change)) scheduleRender();
   });
   chrome.storage.onChanged.addListener((changes, area) => {
-    if (area === 'session' && changes.pinTabs) scheduleRender();
+    if (area === 'session' && (changes.pinTabs || changes.tabOrder || changes.placeholders)) scheduleRender();
     if (area !== 'local') return;
     if (changes.pins) scheduleRender();
     if (changes.settings) showSettings(changes.settings.newValue);
@@ -452,7 +437,7 @@ function applyAccent(accent) {
 // El sitio de la pestaña desde la que se abrió el panel: en el panel de borde lo pasa la página; en el side panel, la pestaña activa.
 async function currentHost() {
   if (isOverlay) return params.get('host') ?? '';
-  const [tab] = await chrome.tabs.query({ active: true, lastFocusedWindow: true });
+  const [tab] = await chrome.tabs.query({ active: true, windowId: await currentWindowId() });
   const url = normalizeHostUrl(tab?.url);
   return url ?? '';
 }
@@ -569,8 +554,8 @@ function rows() {
 }
 
 function firstResult() {
-  const { pins, windows } = filterView(state.view, state.query);
-  return pins[0] ? { pin: pins[0] } : windows[0]?.tabs[0] ? { tab: windows[0].tabs[0] } : null;
+  const { pins, tabs } = filterView(state.view, state.query);
+  return pins[0] ? { pin: pins[0] } : tabs[0] ? { tab: tabs[0] } : null;
 }
 
 applyStaticText();
@@ -612,7 +597,7 @@ $('search').addEventListener('keydown', (event) => {
     rows()[0]?.focus();
   } else if (event.key === 'Enter' && state.query.trim() !== '' && state.view) {
     const result = firstResult();
-    if (result?.pin) openOrFocus(result.pin);
+    if (result?.pin) openOrFocus(result.pin, event.shiftKey);
     else if (result?.tab) focusTab(result.tab, event.shiftKey);
   }
 });

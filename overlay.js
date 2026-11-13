@@ -190,7 +190,7 @@
       if (ui && !pageOwnsPointer()) show({ focus: message === 'zts:reveal-focus', instant: true, sync: false });
       return;
     }
-    if (message === 'zts:conceal') {
+    if (message === 'zts:conceal' || message === 'zts:relocated') {
       hide(false);
       return;
     }

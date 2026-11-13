@@ -5,10 +5,12 @@ import { runInNewContext } from 'node:vm';
 import { randomUUID } from 'node:crypto';
 import { setImmediate } from 'node:timers/promises';
 import * as model from '../src/model.js';
+import * as sharedOrder from '../src/shared-order.js';
 
 const source = (await readFile(new URL('../background.js', import.meta.url), 'utf8'))
   .replace(/^import .* from ['"]\.\/src\/model\.js['"];?\r?\n/m, '')
-  .replace(/^import ['"]\.\/src\/settings\.js['"];?\r?\n/m, '');
+  .replace(/^import ['"]\.\/src\/settings\.js['"];?\r?\n/m, '')
+  .replace(/^import .* from ['"]\.\/src\/shared-order\.js['"];?\r?\n/m, '');
 const settingsSource = await readFile(new URL('../src/settings.js', import.meta.url), 'utf8');
 const pin = (id, url) => ({ id, url, title: id, favIconUrl: '' });
 
@@ -44,7 +46,7 @@ function background({ pins = [], save, read, readTab, storage, session = {}, tab
       },
     },
     tabs: {
-      onActivated: event('activated'), onRemoved: event('tabRemoved'), onReplaced: event('replaced'), onUpdated: event('updated'),
+      onActivated: event('activated'), onAttached: event('attached'), onRemoved: event('tabRemoved'), onReplaced: event('replaced'), onUpdated: event('updated'),
       sendMessage: async () => {},
       get: async (id) => {
         await readTab?.(id);
@@ -71,7 +73,7 @@ function background({ pins = [], save, read, readTab, storage, session = {}, tab
     windows: { onRemoved: event('removed'), update: async () => {} },
     commands: { onCommand: event('command') },
   };
-  runInNewContext(`${settingsSource}\n${source}`, { chrome, console: { error() {} }, URL, crypto: { randomUUID }, ...model });
+  runInNewContext(`${settingsSource}\n${source}`, { chrome, console: { error() {} }, URL, crypto: { randomUUID }, ...model, ...sharedOrder });
   return {
     get pins() { return local.pins; },
     get settings() { return local.settings; },

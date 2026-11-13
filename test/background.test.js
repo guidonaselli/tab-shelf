@@ -4,10 +4,12 @@ import { readFile } from 'node:fs/promises';
 import { runInNewContext } from 'node:vm';
 import { setImmediate } from 'node:timers/promises';
 import * as model from '../src/model.js';
+import * as sharedOrder from '../src/shared-order.js';
 
 const source = (await readFile(new URL('../background.js', import.meta.url), 'utf8'))
   .replace(/^import .* from ['"]\.\/src\/model\.js['"];?\r?\n/m, '')
-  .replace(/^import ['"]\.\/src\/settings\.js['"];?\r?\n/m, '');
+  .replace(/^import ['"]\.\/src\/settings\.js['"];?\r?\n/m, '')
+  .replace(/^import .* from ['"]\.\/src\/shared-order\.js['"];?\r?\n/m, '');
 const settingsSource = await readFile(new URL('../src/settings.js', import.meta.url), 'utf8');
 
 function background({ overlays = {}, overlayFocus = {}, save } = {}) {
@@ -32,6 +34,7 @@ function background({ overlays = {}, overlayFocus = {}, save } = {}) {
     },
     tabs: {
       onActivated: event('activated'),
+      onAttached: event('attached'),
       onRemoved: event('tabRemoved'),
       onReplaced: event('replaced'),
       sendMessage: async (tabId, message) => { sent.push([tabId, message]); },
@@ -39,10 +42,14 @@ function background({ overlays = {}, overlayFocus = {}, save } = {}) {
     windows: { onRemoved: event('removed') },
     commands: { onCommand: event('command') },
   };
-  runInNewContext(`${settingsSource}\n${source}`, { chrome, console, ...model });
+  runInNewContext(`${settingsSource}\n${source}`, { chrome, console, ...model, ...sharedOrder });
   return {
     activate: async (tabId, windowId) => {
       await listeners.activated[0]({ tabId, windowId });
+      await setImmediate();
+    },
+    attach: async (tabId, newWindowId) => {
+      for (const listener of listeners.attached ?? []) await listener(tabId, { newWindowId, newPosition: 0 });
       await setImmediate();
     },
     message: (message, tab, respond = () => {}) => listeners.message[0](message, { tab }, respond),
@@ -54,6 +61,28 @@ function background({ overlays = {}, overlayFocus = {}, save } = {}) {
     sent,
   };
 }
+
+test('el iframe obtiene la ventana de su pestaña emisora', () => {
+  const app = background();
+  const responses = [];
+  app.message('zts:window', { id: 20, windowId: 8 }, (value) => responses.push(value));
+  assert.deepEqual(responses, [8]);
+});
+
+test('trasladar una pestaña con overlay avisa que cambió de ventana', async () => {
+  const app = background({ overlays: { 1: 10, 2: 30 } });
+  await app.attach(10, 2);
+  assert.deepEqual(app.sent, [[10, 'zts:relocated']]);
+});
+
+test('el orden global conserva el reordenamiento al recibir otra lista de ventanas', async () => {
+  const app = background();
+  const request = (tabs) => new Promise((resolve) => app.message({ tabs }, undefined, (value) => resolve(structuredClone(value))));
+  await request({ op: 'order', ids: [10, 20, 30] });
+  assert.deepEqual(await request({ op: 'reorder', tabId: 30, beforeId: 10 }), { ok: true, order: [30, 10, 20] });
+  assert.deepEqual(await request({ op: 'order', ids: [20, 10, 30, 40] }), { ok: true, order: [30, 10, 20, 40] });
+  assert.deepEqual(app.session.tabOrder, [30, 10, 20, 40]);
+});
 
 test('overlay confirma la apertura después de persistir el estado', async () => {
   let finishSave;

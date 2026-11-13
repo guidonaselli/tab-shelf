@@ -84,6 +84,7 @@ async function overlay({ windowId = 7 } = {}) {
   return {
     panel,
     sent,
+    setWindowId: (value) => { windowId = value; },
     pointerDown: async ({ link = true, target = '', svg = false, ...modifiers } = {}) => {
       const element = createElement(link ? 'a' : 'button');
       if (link) Object.assign(element, { href: 'https://other.example/page', target });
@@ -173,6 +174,29 @@ test('conceal y reveal conservan la apertura al volver a la pestaña', async () 
   assert.equal(app.panel.children.length, 1);
   assert.notEqual(app.panel.children[0], previousFrame);
   assert.deepEqual(app.sent, [{ overlay: 'ready' }, 'zts:window', 'zts:window']);
+});
+
+test('relocated desmonta el iframe obsoleto sin registrar un cierre en la nueva ventana', async () => {
+  const app = await overlay();
+  await app.message('zts:reveal');
+  app.setWindowId(8);
+  await app.message('zts:relocated');
+  app.finishTimers();
+  assert.deepEqual([app.panel.classList.contains('open'), app.panel.children.length, app.sent], [
+    false, 0, [{ overlay: 'ready' }, 'zts:window'],
+  ]);
+});
+
+test('reabrir después de relocated consulta la ventana actual para el iframe', async () => {
+  const app = await overlay();
+  await app.message('zts:reveal');
+  app.setWindowId(8);
+  await app.message('zts:relocated');
+  app.finishTimers();
+  await app.message('zts:reveal');
+  assert.deepEqual(app.panel.children.map((frame) => frame.src), [
+    'chrome-extension://test/panel.html?window=8&host=example.com',
+  ]);
 });
 
 test('cerrar desde el iframe oculta el panel y registra el cierre', async () => {

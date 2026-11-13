@@ -126,6 +126,7 @@ export function filterView(view, query) {
       .map((w) => ({ ...w, tabs: w.tabs.filter(hit) }))
       .filter((w) => w.tabs.length > 0),
     pins: view.pins.filter(hit),
+    tabs: view.tabs?.filter(hit),
   };
 }
 
@@ -141,18 +142,6 @@ export function removePin(pins, id) {
   return pins.filter((p) => p.id !== id);
 }
 
-// Índice final que espera tabs.move al soltar antes de `insertBefore` (posición en la lista original).
-export function dropIndex({ fromWindowId, fromIndex, toWindowId, insertBefore }) {
-  if (fromWindowId === toWindowId && insertBefore > fromIndex) return insertBefore - 1;
-  return insertBefore;
-}
-
-// Qué hace el clic en una pestaña: traerla a la ventana actual ('bring') o ir a su ventana ('go'). Shift fuerza ir.
-// Mover la única pestaña de una ventana la cerraría, así que en ese caso también se va.
-export function clickAction({ tabWindowId, windowTabCount, hereWindowId, shift }) {
-  if (tabWindowId === hereWindowId) return 'stay';
-  return shift || windowTabCount === 1 ? 'go' : 'bring';
-}
 
 // Pestañas sobrantes entre las que apuntan a la misma dirección exacta: de cada grupo se conserva la activa, o la primera.
 export function duplicateTabIds(view) {
