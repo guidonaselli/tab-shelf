@@ -1,4 +1,4 @@
-import { contrastForeground, surfaceTint, buildView, filterView, duplicateTabIds, parseBackup } from './src/model.js';
+import { contrastForeground, surfaceTint, buildView, filterView, duplicateTabIds, parseBackup, PLACEHOLDER_URL } from './src/model.js';
 import './src/settings.js';
 import { glyph } from './src/icons.js';
 
@@ -88,11 +88,11 @@ async function loadView() {
     currentWindowId(),
     chrome.storage.session.get(['pinTabs', 'placeholders']),
   ]);
-  for (const win of windows) win.tabs = (win.tabs ?? []).filter((tab) => !(placeholders.includes(tab.id) && (tab.url || tab.pendingUrl || '') === chrome.runtime.getURL('panel.html')));
+  for (const win of windows) win.tabs = (win.tabs ?? []).filter((tab) => (tab.url || tab.pendingUrl) !== PLACEHOLDER_URL && !(placeholders.includes(tab.id) && (tab.url || tab.pendingUrl) === `chrome-extension://${chrome.runtime.id}/panel.html`));
   const view = buildView(windows, pins, { currentWindowId: current, emptyTitle: t('emptyTabTitle'), pinTabs });
   const tabs = view.windows.flatMap((win) => win.tabs);
   const result = await chrome.runtime.sendMessage({ tabs: { op: 'order', ids: tabs.map((tab) => tab.id) } });
-  if (!result?.ok) throw new Error(result?.error || t('errorGeneric', 'Order unavailable'));
+  if (!result?.ok) throw new Error(result?.error || t('orderReloadRequired'));
   const byId = new Map(tabs.map((tab) => [tab.id, tab]));
   view.tabs = result.order.map((id) => byId.get(id)).filter(Boolean);
   const matches = view.pins.filter((pin) => !Object.hasOwn(pinTabs, pin.id) && pin.openTabId !== null)

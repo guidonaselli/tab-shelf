@@ -24,6 +24,7 @@ function background({ pins = [], save, read, readTab, storage, session = {}, tab
   const chrome = {
     sidePanel: { setPanelBehavior: async () => {} },
     runtime: {
+      id: 'test',
       onInstalled: event('installed'),
       onStartup: event('startup'),
       onMessage: event('message'),
@@ -57,7 +58,7 @@ function background({ pins = [], save, read, readTab, storage, session = {}, tab
       query: async () => structuredClone(tabs),
       create: async (values) => {
         await setImmediate();
-        const tab = { id: 100 + created.length, ...structuredClone(values) };
+        const tab = { id: 100 + created.length, ...structuredClone(values), url: values.url === 'panel.html' ? 'chrome-extension://test/panel.html' : values.url };
         created.push(tab);
         tabs.push(tab);
         return structuredClone(tab);

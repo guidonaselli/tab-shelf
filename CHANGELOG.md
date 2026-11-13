@@ -1,9 +1,10 @@
 # Changelog
 
-## Unreleased
+## 0.5.0
 
+- Fixed panel transitions and clarified when the extension needs to be reloaded.
 - Tabs from all windows now appear in one flat list with a global order for the session. Dragging or `Alt+↑` / `Alt+↓` reorders across windows; the order is rebuilt after a browser restart or extension reload.
-- Clicking a row from another window moves the real tab to the current window and activates it; `Shift`+click focuses its source window, including for pins. If it was the last tab, an auxiliary tab with the panel keeps that window open. Explicit controls move tabs between windows.
+- Clicking a row from another window moves the real tab to the current window and activates it; `Shift`+click focuses its source window, including for pins. Before moving a tab, a protected, empty source-window placeholder is created or reused and hidden from the shared list; it survives extension reload and browser session restoration. If the source window becomes empty, use the side panel or open another tab to access Tab Shelf. Navigating the placeholder turns it into a regular tab. Explicit controls move tabs between windows.
 - Pins and settings are retained across browser restarts and extension reloads.
 
 ## 0.4.0

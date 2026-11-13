@@ -11,13 +11,12 @@ const source = (await readFile(new URL('../background.js', import.meta.url), 'ut
   .replace(/^import ['"]\.\/src\/settings\.js['"];?\r?\n/m, '');
 const settingsSource = await readFile(new URL('../src/settings.js', import.meta.url), 'utf8');
 
-function background({ tabs, failCreate = false }) {
+function background({ tabs, failCreate = false, closeBeforeMove, session = {} }) {
   const listeners = {};
   const state = structuredClone(tabs);
   const windows = new Set(tabs.map((tab) => tab.windowId));
   const calls = [];
   const local = { pins: [] };
-  const session = {};
   let nextId = 100;
   let focusedWindow = 1;
   const event = (name) => ({ addListener: (listener) => (listeners[name] ??= []).push(listener) });
@@ -33,6 +32,7 @@ function background({ tabs, failCreate = false }) {
   const chrome = {
     sidePanel: { setPanelBehavior: async () => {} },
     runtime: {
+      id: 'test',
       onInstalled: event('installed'),
       onStartup: event('startup'),
       onMessage: event('message'),
@@ -59,12 +59,16 @@ function background({ tabs, failCreate = false }) {
         calls.push(['create', properties.windowId]);
         if (failCreate) throw new Error('Cannot create tab');
         if (!windows.has(properties.windowId)) throw new Error('No window');
-        const tab = { id: nextId++, windowId: properties.windowId, active: properties.active ?? true, url: properties.url ?? 'chrome://newtab/' };
+        const tab = { id: nextId++, windowId: properties.windowId, active: properties.active ?? true, url: new URL(properties.url ?? 'chrome://newtab/', 'chrome-extension://test/').href };
         state.push(tab);
         return structuredClone(tab);
       },
       move: async (id, properties) => {
         calls.push(['move', id, properties.windowId]);
+        if (closeBeforeMove !== undefined) {
+          state.splice(state.findIndex((tab) => tab.id === closeBeforeMove), 1);
+          closeBeforeMove = undefined;
+        }
         const tab = getTab(id);
         if (!windows.has(properties.windowId)) throw new Error('No window');
         const origin = tab.windowId;
@@ -156,6 +160,19 @@ test('move también conserva la ventana al trasladar su última pestaña', async
   });
 });
 
+test('move conserva el origen si otra pestaña se cierra después de consultar la ventana', async () => {
+  const app = background({
+    tabs: tabs.map((tab) => ({ ...tab, active: tab.id !== 20 })),
+    closeBeforeMove: 21,
+  });
+  const response = await app.command({ op: 'move', tabId: 20, windowId: 1 });
+  assert.deepEqual({ response, originOpen: app.windows.has(2), tab: app.state.find((tab) => tab.id === 20) }, {
+    response: { ok: true },
+    originOpen: true,
+    tab: { id: 20, windowId: 1, active: false, url: 'https://remote.test/', index: -1 },
+  });
+});
+
 test('si falla la creación auxiliar devuelve el error sin mover la última pestaña', async () => {
   const app = background({ tabs: tabs.slice(0, 2), failCreate: true });
   const response = await app.command({ op: 'activate', tabId: 20, windowId: 1, shift: false });
@@ -171,7 +188,7 @@ test('dos traslados simultáneos se serializan y conservan las pestañas y la ve
     app.command({ op: 'move', tabId: 21, windowId: 1 }),
   ]);
   assert.deepEqual({ responses, calls: app.calls, ids: app.state.map((tab) => tab.id).sort((a, b) => a - b), origins: app.state.filter((tab) => tab.windowId === 2).map((tab) => tab.id), originOpen: app.windows.has(2) }, {
-    responses: [{ ok: true }, { ok: true }], calls: [['move', 20, 1], ['create', 2], ['move', 21, 1]], ids: [10, 20, 21, 100], origins: [100], originOpen: true,
+    responses: [{ ok: true }, { ok: true }], calls: [['create', 2], ['move', 20, 1], ['move', 21, 1]], ids: [10, 20, 21, 100], origins: [100], originOpen: true,
   });
 });
 
@@ -183,5 +200,57 @@ test('un error no impide ejecutar el siguiente comando en la cola', async () => 
   ]);
   assert.deepEqual({ responses, focused: app.focusedWindow }, {
     responses: [{ ok: false, error: 'Cannot create tab' }, { ok: true }], focused: 2,
+  });
+});
+
+test('move reutiliza la auxiliar registrada en su ventana de origen', async () => {
+  const app = background({
+    tabs: [...tabs.slice(0, 2), { id: 30, windowId: 2, active: false, url: 'chrome-extension://test/panel.html' }],
+    session: { placeholders: [30] },
+  });
+  const response = await app.command({ op: 'move', tabId: 20, windowId: 1 });
+  assert.deepEqual({ response, calls: app.calls, origin: app.state.filter((tab) => tab.windowId === 2), originOpen: app.windows.has(2) }, {
+    response: { ok: true }, calls: [['move', 20, 1]],
+    origin: [{ id: 30, windowId: 2, active: false, url: 'chrome-extension://test/panel.html' }], originOpen: true,
+  });
+});
+
+test('una auxiliar navegada se trata como pestaña normal y recibe el foco del origen', async () => {
+  const app = background({
+    tabs: [...tabs.slice(0, 2), { id: 30, windowId: 2, active: false, url: 'https://navigated.test/' }],
+    session: { placeholders: [30] },
+  });
+  const response = await app.command({ op: 'move', tabId: 20, windowId: 1 });
+  assert.deepEqual({ response, calls: app.calls, origin: app.state.filter((tab) => tab.windowId === 2), originOpen: app.windows.has(2) }, {
+    response: { ok: true }, calls: [['create', 2], ['move', 20, 1]],
+    origin: [
+      { id: 30, windowId: 2, active: true, url: 'https://navigated.test/' },
+      { id: 100, windowId: 2, active: false, url: 'about:blank#tab-shelf-placeholder' },
+    ], originOpen: true,
+  });
+});
+
+test('move crea una auxiliar marcada para reconocerla después de perder la sesión', async () => {
+  const app = background({ tabs: tabs.slice(0, 2) });
+  const response = await app.command({ op: 'move', tabId: 20, windowId: 1 });
+  assert.deepEqual({ response, origin: app.state.filter((tab) => tab.windowId === 2) }, {
+    response: { ok: true },
+    origin: [{ id: 100, windowId: 2, active: false, url: 'about:blank#tab-shelf-placeholder' }],
+  });
+});
+
+test('move reutiliza una auxiliar marcada después de perder la sesión', async () => {
+  const app = background({
+    session: {},
+    tabs: [
+      ...tabs.slice(0, 2).map((tab) => ({ ...tab, active: tab.id !== 20 })),
+      { id: 30, windowId: 2, active: false, url: 'about:blank#tab-shelf-placeholder' },
+    ],
+  });
+  const response = await app.command({ op: 'move', tabId: 20, windowId: 1 });
+  assert.deepEqual({ response, calls: app.calls, origin: app.state.filter((tab) => tab.windowId === 2), tab: app.state.find((tab) => tab.id === 20), originOpen: app.windows.has(2) }, {
+    response: { ok: true }, calls: [['move', 20, 1]],
+    origin: [{ id: 30, windowId: 2, active: false, url: 'about:blank#tab-shelf-placeholder' }],
+    tab: { id: 20, windowId: 1, active: false, url: 'https://remote.test/', index: -1 }, originOpen: true,
   });
 });

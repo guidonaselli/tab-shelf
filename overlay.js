@@ -72,6 +72,7 @@
       pendingFocus = false;
       const params = new URLSearchParams({ window: windowId, host: location.hostname });
       if (focus) params.set('focus', '1');
+      ui.frame?.remove();
       ui.frame = document.createElement('iframe');
       ui.frame.title = chrome.i18n.getMessage('extName');
       ui.frame.src = `${chrome.runtime.getURL('panel.html')}?${params}`;

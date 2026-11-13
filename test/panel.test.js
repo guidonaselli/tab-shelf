@@ -9,7 +9,7 @@ const [source, settings, icons, html] = await Promise.all(
   ['panel.js', 'src/settings.js', 'src/icons.js', 'panel.html'].map((path) => readFile(new URL(`../${path}`, import.meta.url), 'utf8')),
 );
 
-async function panel(pins = [{ id: 'docs', title: 'Docs', url: 'https://example.com/' }], { isOverlay = true, tabs = [], session = {} } = {}) {
+async function panel(pins = [{ id: 'docs', title: 'Docs', url: 'https://example.com/' }], { isOverlay = true, tabs = [], session = {}, extensionId = 'test', extensionHost = extensionId, orderUnavailable = false } = {}) {
   const messages = [];
   const runtimeMessages = [];
   const elements = [];
@@ -88,11 +88,11 @@ async function panel(pins = [{ id: 'docs', title: 'Docs', url: 'https://example.
   });
   const event = { addListener() {} };
   const chrome = {
-    i18n: { getMessage: (key, substitutions) => key === 'errorGeneric' ? `Error: ${substitutions}` : key, getUILanguage: () => 'en' },
-    runtime: { getURL: (path) => `chrome-extension://test/${path}`, sendMessage: async (message) => {
+    i18n: { getMessage: (key, substitutions) => key === 'errorGeneric' ? `Something went wrong: ${substitutions}` : key === 'orderReloadRequired' ? 'Reload the extension and reopen this panel.' : key, getUILanguage: () => 'en' },
+    runtime: { id: extensionId, getURL: (path) => `chrome-extension://${extensionHost}/${path}`, sendMessage: async (message) => {
       runtimeMessages.push(structuredClone(message));
       if (message === 'zts:window') return 7;
-      if (message?.tabs?.op === 'order') return { ok: true, order: session.tabOrder ?? message.tabs.ids };
+      if (message?.tabs?.op === 'order') return orderUnavailable ? undefined : { ok: true, order: session.tabOrder ?? message.tabs.ids };
       return message?.pins || message?.tabs ? { ok: true, tabId: 20 } : '';
     } },
     storage: {
@@ -121,7 +121,7 @@ async function panel(pins = [{ id: 'docs', title: 'Docs', url: 'https://example.
     setTimeout: (callback) => timers.push(callback),
   });
   await setImmediate();
-  assert.equal(ids.get('status').hidden, true);
+  assert.equal(ids.get('status').hidden, !orderUnavailable);
   assert.equal(ids.get('pins').children.length, pins.length);
   messages.length = 0;
   return {
@@ -131,6 +131,16 @@ async function panel(pins = [{ id: 'docs', title: 'Docs', url: 'https://example.
     blurWindow() { focused = false; document.dispatchEvent({ type: 'focusout' }); },
   };
 }
+
+test('una respuesta order ausente muestra una instrucción localizada para recargar sin duplicar el error', async () => {
+  const app = await panel([], { orderUnavailable: true });
+  const status = app.document.getElementById('status');
+  assert.deepEqual({ hidden: status.hidden, className: status.className, text: status.textContent }, {
+    hidden: false,
+    className: 'error',
+    text: 'Something went wrong: Reload the extension and reopen this panel.',
+  });
+});
 
 test('perder el foco durante un arrastre de pin mantiene busy hasta dragend', async () => {
   const app = await panel();
@@ -189,6 +199,20 @@ test('un auxiliar navegado a un panel.html externo aparece y el auxiliar real qu
     tabs: [
       { id: 10, windowId: 7, index: 0, title: 'Sitio', url: 'https://site.test/panel.html', active: true },
       { id: 20, windowId: 7, index: 1, title: 'Auxiliar', url: 'chrome-extension://test/panel.html', active: false },
+    ],
+    session: { placeholders: [10, 20] },
+  });
+  const list = app.document.getElementById('windows').children[0];
+  assert.deepEqual(list.children.map((row) => row.children[0].dataset.focus), ['tab:10:main']);
+});
+
+test('el auxiliar con ID estático queda oculto cuando getURL usa una URL dinámica', async () => {
+  const app = await panel([], {
+    extensionId: 'abcdefghijklmnopabcdefghijklmnop',
+    extensionHost: 'a1b2c3d4-1234-4567-89ab-123456789abc',
+    tabs: [
+      { id: 10, windowId: 7, index: 0, title: 'Sitio', url: 'https://site.test/panel.html', active: true },
+      { id: 20, windowId: 7, index: 1, title: 'Auxiliar', url: 'chrome-extension://abcdefghijklmnopabcdefghijklmnop/panel.html', active: false },
     ],
     session: { placeholders: [10, 20] },
   });
@@ -273,6 +297,22 @@ for (const isOverlay of [false, true]) {
     app.document.getElementById('copy-url').dispatchEvent({ type: 'click' });
     await setImmediate();
     const status = app.document.getElementById('status');
-    assert.deepEqual([app.copied, status.hidden, status.className, status.textContent], [[], false, 'error', 'Error: copyFailed']);
+    assert.deepEqual([app.copied, status.hidden, status.className, status.textContent], [[], false, 'error', 'Something went wrong: copyFailed']);
+  });
+}
+
+for (const isOverlay of [false, true]) {
+  test(`una auxiliar marcada sigue oculta sin sesión y conserva paneles manuales y webs en ${isOverlay ? 'iframe' : 'panel'}`, async () => {
+    const app = await panel([], {
+      isOverlay,
+      session: {},
+      tabs: [
+        { id: 10, windowId: 7, index: 0, title: 'Panel manual', url: 'chrome-extension://test/panel.html', active: true },
+        { id: 20, windowId: 7, index: 1, title: 'Auxiliar', url: 'about:blank#tab-shelf-placeholder', active: false },
+        { id: 30, windowId: 7, index: 2, title: 'Sitio', url: 'https://site.test/panel.html?placeholder=1', active: false },
+      ],
+    });
+    const list = app.document.getElementById('windows').children[0];
+    assert.deepEqual(list.children.map((row) => row.children[0].dataset.focus), ['tab:10:main', 'tab:30:main']);
   });
 }

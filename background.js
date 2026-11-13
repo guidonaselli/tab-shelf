@@ -1,4 +1,4 @@
-import { addPin, removePin, movePin, parseBackup, matchPin } from './src/model.js';
+import { addPin, removePin, movePin, parseBackup, matchPin, PLACEHOLDER_URL } from './src/model.js';
 import './src/settings.js';
 import { reconcileOrder, moveInOrder } from './src/shared-order.js';
 
@@ -27,15 +27,19 @@ function queuePinWork(action) {
 async function moveSafely(tab, windowId) {
   if (tab.windowId === windowId) return;
   const sourceTabs = await chrome.tabs.query({ windowId: tab.windowId });
-  if (sourceTabs.length === 1) {
-    const placeholder = await chrome.tabs.create({ windowId: tab.windowId, url: 'panel.html', active: false });
-    const { placeholders = [] } = await chrome.storage.session.get('placeholders');
-    await chrome.storage.session.set({ placeholders: [...placeholders, placeholder.id] });
+  const { placeholders = [] } = await chrome.storage.session.get('placeholders');
+  const panelUrl = `chrome-extension://${chrome.runtime.id}/panel.html`;
+  const isPlaceholder = (item) => (item.url || item.pendingUrl) === PLACEHOLDER_URL || (placeholders.includes(item.id) && (item.url || item.pendingUrl) === panelUrl);
+  if (!sourceTabs.some(isPlaceholder)) {
+    const placeholder = await chrome.tabs.create({ windowId: tab.windowId, url: PLACEHOLDER_URL, active: false });
+    placeholders.push(placeholder.id);
+    await chrome.storage.session.set({ placeholders });
   }
   await chrome.tabs.move(tab.id, { windowId, index: -1 });
-  if (tab.active && sourceTabs.length > 1) {
-    const recent = sourceTabs.filter((item) => item.id !== tab.id).sort((a, b) => (b.lastAccessed ?? 0) - (a.lastAccessed ?? 0))[0];
-    await chrome.tabs.update(recent.id, { active: true });
+  if (tab.active) {
+    const remaining = await chrome.tabs.query({ windowId: tab.windowId });
+    const recent = remaining.filter((item) => !isPlaceholder(item)).sort((a, b) => (b.lastAccessed ?? 0) - (a.lastAccessed ?? 0))[0];
+    if (recent) await chrome.tabs.update(recent.id, { active: true });
   }
 }
 

@@ -1,3 +1,5 @@
+export const PLACEHOLDER_URL = 'about:blank#tab-shelf-placeholder';
+
 const rgb = (hex) => [1, 3, 5].map((i) => parseInt(hex.slice(i, i + 2), 16) / 255);
 const luminance = (rgb) => rgb.map((c) => c <= 0.04045 ? c / 12.92 : ((c + 0.055) / 1.055) ** 2.4)
   .reduce((sum, c, i) => sum + c * [0.2126, 0.7152, 0.0722][i], 0);

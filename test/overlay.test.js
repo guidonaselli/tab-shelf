@@ -176,6 +176,22 @@ test('conceal y reveal conservan la apertura al volver a la pestaña', async () 
   assert.deepEqual(app.sent, [{ overlay: 'ready' }, 'zts:window', 'zts:window']);
 });
 
+test('reabrir antes de terminar el cierre reemplaza el iframe inmediatamente y conserva el nuevo', async () => {
+  const app = await overlay();
+  await app.message('zts:reveal');
+  const previousFrame = app.panel.children[0];
+  await app.message('zts:conceal');
+  await app.message('zts:reveal');
+  assert.deepEqual({ count: app.panel.children.length, replaced: app.panel.children[0] !== previousFrame }, {
+    count: 1, replaced: true,
+  });
+  const reopenedFrame = app.panel.children[0];
+  app.finishTimers();
+  assert.deepEqual({ count: app.panel.children.length, preserved: app.panel.children[0] === reopenedFrame }, {
+    count: 1, preserved: true,
+  });
+});
+
 test('relocated desmonta el iframe obsoleto sin registrar un cierre en la nueva ventana', async () => {
   const app = await overlay();
   await app.message('zts:reveal');

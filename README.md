@@ -14,8 +14,7 @@ single, globally ordered list.
   you pick the side, width, opacity and panel background color, the size of the trigger zone and how fast it opens and closes,
   or turn it off. You can also turn it off for single sites, for example games or web apps that use the page edge.
 - **Click to bring here.** Clicking a row from another window moves that real browser tab to the current window and
-  activates it. `Shift`+click focuses its source window, including for pins. If it was the last tab, Tab Shelf creates
-  an auxiliary tab with the panel to keep that window open. Use the explicit move controls to move tabs between windows.
+  activates it. `Shift`+click focuses its source window, including for pins. Before transferring a tab, Tab Shelf creates or reuses a protected, empty auxiliary tab in its source window; it is identified and hidden from the shared list, and survives extension reload and browser session restoration. If the source window becomes empty, use the side panel or open another tab to access Tab Shelf. If the auxiliary tab is navigated, it becomes a regular tab. Use the explicit move controls to move tabs between windows.
 - **Close and mute.** Close a tab with its `x` button, a middle click or `Delete`. Tabs that play sound show a speaker
   button to mute them.
 - **Keyboard.** `Alt+Shift+S` shows or hides the edge panel and puts you in the search box (it falls back to the
